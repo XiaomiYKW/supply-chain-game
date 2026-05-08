@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>供应链模拟游戏 - 教师端</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand">教师端 - 供应链模拟游戏</span>
+            <a href="index.html" class="btn btn-outline-light btn-sm">退出</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2 class="mb-4">学生利润排行榜</h2>
+        <div class="table-responsive mb-5">
+            <table class="table table-striped table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>排名</th>
+                        <th>学生</th>
+                        <th>累计利润</th>
+                        <th>已完成月数</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="rankingTable">
+                    <tr><td colspan="5" class="text-center">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="row" id="studentDetailSection" style="display:none;">
+            <div class="col-md-12">
+                <h3 class="mb-3"><span id="selectedStudentName"></span> - 历史数据</h3>
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <canvas id="profitChart" height="80"></canvas>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>月份</th>
+                                <th>预测需求</th>
+                                <th>实际需求</th>
+                                <th>实际销售</th>
+                                <th>收入</th>
+                                <th>成本</th>
+                                <th>利润</th>
+                                <th>期末现金</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentHistoryTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8005';
+        let currentUserId = localStorage.getItem('userId');
+        let profitChart = null;
+
+        async function loadRanking() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/teacher/ranking`);
+                const data = await response.json();
+
+                const tbody = document.getElementById('rankingTable');
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无学生数据</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(r => `
+                    <tr>
+                        <td><span class="badge bg-primary">${r.rank}</span></td>
+                        <td>${r.username}</td>
+                        <td class="fw-bold ${r.total_profit >= 0 ? 'text-success' : 'text-danger'}">
+                            ¥${r.total_profit.toLocaleString()}
+                        </td>
+                        <td>${r.months_played} 月</td>
+                        <td>
+                            <button class="btn btn-sm btn-info" onclick="viewStudent(${r.user_id}, '${r.username}')">
+                                查看详情
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('加载排名失败:', error);
+            }
+        }
+
+        async function viewStudent(userId, username) {
+            document.getElementById('studentDetailSection').style.display = 'block';
+            document.getElementById('selectedStudentName').innerText = username;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/teacher/student/${userId}/history`);
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    document.getElementById('studentHistoryTable').innerHTML =
+                        '<tr><td colspan="8" class="text-center text-muted">暂无历史数据</td></tr>';
+                    return;
+                }
+
+                document.getElementById('studentHistoryTable').innerHTML = data.map(s => `
+                    <tr>
+                        <td>第 ${s.month} 月</td>
+                        <td>${s.forecast_demand}</td>
+                        <td>${s.actual_demand}</td>
+                        <td>${s.actual_sales}</td>
+                        <td>¥${(s.revenue || 0).toLocaleString()}</td>
+                        <td>¥${(s.total_cost || 0).toLocaleString()}</td>
+                        <td class="${s.profit >= 0 ? 'text-success' : 'text-danger'}">
+                            ¥${(s.profit || 0).toLocaleString()}
+                        </td>
+                        <td>¥${(s.cash || 0).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+
+                renderChart(data);
+            } catch (error) {
+                console.error('加载学生历史失败:', error);
+            }
+        }
+
+        function renderChart(historyData) {
+            const ctx = document.getElementById('profitChart').getContext('2d');
+
+            if (profitChart) {
+                profitChart.destroy();
+            }
+
+            const labels = historyData.map(s => `第 ${s.month} 月`);
+            const profits = historyData.map(s => s.profit || 0);
+            const revenues = historyData.map(s => s.revenue || 0);
+            const costs = historyData.map(s => s.total_cost || 0);
+
+            profitChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '利润',
+                            data: profits,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: '收入',
+                            data: revenues,
+                            borderColor: 'rgb(54, 162, 235)',
+                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                            tension: 0.3,
+                            fill: false
+                        },
+                        {
+                            label: '成本',
+                            data: costs,
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            tension: 0.3,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '利润/收入/成本 趋势图'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: '金额 (¥)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadRanking);
+    </script>
+</body>
+</html>
