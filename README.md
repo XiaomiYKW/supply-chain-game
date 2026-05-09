@@ -16,8 +16,8 @@
   - `main.py`: API 入口与路由定义
   - `models.py`: 数据库 ORM 模型
   - `game_logic.py`: 核心结算算法与下月推导逻辑
-  - `database.py`: 数据库连接配置 (SQLite)
-- `frontend/`: 基于 HTML5 + Bootstrap + Chart.js 的前端
+  - `database.py`: 数据库连接配置 (SQLite/PostgreSQL)
+- **前端文件 (根目录)**: 
   - `index.html`: 登录页面
   - `decision.html`: 学生决策录入页
   - `report.html`: 个人结算报告与趋势图
@@ -36,7 +36,7 @@ uvicorn main:app --reload --port 8005
 ### 2. 前端访问
 推荐使用 Python 的简易服务器以避免某些浏览器的本地文件访问限制：
 ```bash
-cd frontend
+# 在项目根目录运行
 python -m http.server 8080
 ```
 访问地址：`http://localhost:8080/index.html`
