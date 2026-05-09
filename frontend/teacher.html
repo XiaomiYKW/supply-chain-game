@@ -64,7 +64,9 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:8005';
+        const API_BASE_URL = window.location.hostname.includes('github.io') || window.location.hostname.includes('vercel.app')
+            ? 'https://supply-chain-game.onrender.com' 
+            : 'http://localhost:8005';
         let currentUserId = localStorage.getItem('userId');
         let profitChart = null;
 

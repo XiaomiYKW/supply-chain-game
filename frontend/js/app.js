@@ -1,4 +1,7 @@
-const API_BASE_URL = 'http://localhost:8005';
+// 云端部署地址
+const API_BASE_URL = window.location.hostname.includes('github.io') || window.location.hostname.includes('vercel.app')
+    ? 'https://supply-chain-game.onrender.com' 
+    : 'http://localhost:8005';
 
 let currentUserId = localStorage.getItem('userId') || null;
 let currentUsername = localStorage.getItem('username') || '';
