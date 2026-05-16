@@ -92,9 +92,35 @@
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:8005'
             : 'https://supply-chain-game.onrender.com';
-        let currentUserId = localStorage.getItem('userId');
+        const authToken = localStorage.getItem('authToken');
         let profitChart = null;
         let rankingCache = [];
+
+        async function ensureTeacherOrRedirect() {
+            if (!authToken) {
+                window.location.href = 'index.html';
+                return false;
+            }
+            try {
+                const res = await fetch(`${API_BASE_URL}/me`, {
+                    method: 'GET',
+                    headers: { 'X-Auth-Token': authToken }
+                });
+                if (!res.ok) {
+                    window.location.href = 'index.html';
+                    return false;
+                }
+                const me = await res.json();
+                if (!me || me.role !== 'teacher') {
+                    window.location.href = 'index.html';
+                    return false;
+                }
+                return true;
+            } catch {
+                window.location.href = 'index.html';
+                return false;
+            }
+        }
 
         function setBackendBadge(ok) {
             const badge = document.getElementById('backendStatusBadge');
@@ -150,7 +176,10 @@
             const errorEl = document.getElementById('teacherError');
             if (errorEl) errorEl.classList.add('d-none');
             try {
-                const response = await fetch(`${API_BASE_URL}/teacher/ranking`);
+                const response = await fetch(`${API_BASE_URL}/teacher/ranking`, {
+                    method: 'GET',
+                    headers: { 'X-Auth-Token': authToken }
+                });
                 if (!response.ok) {
                     throw new Error('ranking api failed');
                 }
@@ -171,7 +200,10 @@
             document.getElementById('selectedStudentName').innerText = username;
 
             try {
-                const response = await fetch(`${API_BASE_URL}/teacher/student/${userId}/history`);
+                const response = await fetch(`${API_BASE_URL}/teacher/student/${userId}/history`, {
+                    method: 'GET',
+                    headers: { 'X-Auth-Token': authToken }
+                });
                 const data = await response.json();
 
                 if (data.length === 0) {
@@ -262,16 +294,23 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', loadRanking);
-        document.addEventListener('DOMContentLoaded', pingBackend);
+        document.addEventListener('DOMContentLoaded', async () => {
+            const ok = await ensureTeacherOrRedirect();
+            if (!ok) return;
+            loadRanking();
+            pingBackend();
+        });
         document.getElementById('rankingSearch')?.addEventListener('input', applyRankingFilter);
         document.getElementById('refreshRankingBtn')?.addEventListener('click', () => {
             const tbody = document.getElementById('rankingTable');
             if (tbody) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-secondary"><div class="spinner-border" role="status" aria-hidden="true"></div><div class="mt-2">加载中...</div></td></tr>';
             }
-            loadRanking();
-            pingBackend();
+            ensureTeacherOrRedirect().then(ok => {
+                if (!ok) return;
+                loadRanking();
+                pingBackend();
+            });
         });
     </script>
 </body>

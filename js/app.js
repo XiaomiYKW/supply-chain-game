@@ -6,12 +6,14 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
 let currentUserId = localStorage.getItem('userId') || null;
 let currentUsername = localStorage.getItem('username') || '';
 let currentRole = localStorage.getItem('role') || 'student';
+let currentAuthToken = localStorage.getItem('authToken') || null;
 let latestState = null;
 
 function logout() {
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
     localStorage.removeItem('role');
+    localStorage.removeItem('authToken');
     currentUserId = null;
     window.location.href = 'index.html';
 }
@@ -53,9 +55,15 @@ if (loginForm) {
                 localStorage.setItem('userId', data.id);
                 localStorage.setItem('username', data.username);
                 localStorage.setItem('role', data.role || 'student');
+                if (data.token) {
+                    localStorage.setItem('authToken', data.token);
+                } else {
+                    localStorage.removeItem('authToken');
+                }
                 currentUserId = data.id;
                 currentUsername = data.username;
                 currentRole = data.role || 'student';
+                currentAuthToken = data.token || null;
 
                 if (currentRole === 'teacher') {
                     window.location.href = 'teacher.html';

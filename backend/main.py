@@ -1,18 +1,19 @@
 import models
 import database
 import game_logic
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from collections import defaultdict
+import uuid
 
 models.Base.metadata.create_all(bind=database.engine)
 
 def ensure_schema():
-    desired = {
+    desired_game_config = {
         "raw_warehouse_capacity": ("FLOAT", "2000"),
         "fg_warehouse_capacity": ("FLOAT", "1500"),
         "raw_overflow_cost": ("FLOAT", "10"),
@@ -24,21 +25,19 @@ def ensure_schema():
         if engine.dialect.name == "sqlite":
             rows = conn.execute(text("PRAGMA table_info(game_config)")).fetchall()
             existing = {r[1] for r in rows}
-            for col, (col_type, default_value) in desired.items():
+            for col, (col_type, default_value) in desired_game_config.items():
                 if col in existing:
                     continue
-                conn.execute(
-                    text(
-                        f"ALTER TABLE game_config ADD COLUMN {col} {col_type} DEFAULT {default_value}"
-                    )
-                )
+                conn.execute(text(f"ALTER TABLE game_config ADD COLUMN {col} {col_type} DEFAULT {default_value}"))
+
+            user_rows = conn.execute(text("PRAGMA table_info(users)")).fetchall()
+            user_existing = {r[1] for r in user_rows}
+            if "auth_token" not in user_existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN auth_token TEXT"))
         else:
-            for col, (col_type, default_value) in desired.items():
-                conn.execute(
-                    text(
-                        f"ALTER TABLE game_config ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default_value}"
-                    )
-                )
+            for col, (col_type, default_value) in desired_game_config.items():
+                conn.execute(text(f"ALTER TABLE game_config ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default_value}"))
+            conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_token VARCHAR(64)"))
 
 ensure_schema()
 
@@ -57,6 +56,28 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def issue_token(user: models.User, db: Session) -> str:
+    token = uuid.uuid4().hex
+    user.auth_token = token
+    db.commit()
+    return token
+
+def get_current_user(
+    db: Session = Depends(get_db),
+    x_auth_token: Optional[str] = Header(default=None, alias="X-Auth-Token"),
+) -> models.User:
+    if not x_auth_token:
+        raise HTTPException(status_code=401, detail="Missing auth token")
+    user = db.query(models.User).filter(models.User.auth_token == x_auth_token).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid auth token")
+    return user
+
+def get_current_teacher(user: models.User = Depends(get_current_user)) -> models.User:
+    if user.role != "teacher":
+        raise HTTPException(status_code=403, detail="Teacher access required")
+    return user
 
 class DecisionSubmit(BaseModel):
     user_id: int
@@ -87,6 +108,11 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = issue_token(user, db)
+    return {"id": user.id, "username": user.username, "role": user.role, "token": token}
+
+@app.get("/me")
+def me(user: models.User = Depends(get_current_user)):
     return {"id": user.id, "username": user.username, "role": user.role}
 
 @app.post("/users/")
@@ -99,6 +125,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.add(db_user)
     db.commit()
     db.refresh(db_user)
+    token = issue_token(db_user, db)
 
     config = db.query(models.GameConfig).first()
     if not config:
@@ -122,7 +149,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     )
     db.add(first_state)
     db.commit()
-    return {"id": db_user.id, "username": db_user.username, "role": db_user.role}
+    return {"id": db_user.id, "username": db_user.username, "role": db_user.role, "token": token}
 
 @app.get("/game_state/{user_id}")
 def get_game_state(user_id: int, db: Session = Depends(get_db)):
@@ -278,7 +305,7 @@ def settle_month(user_id: int, db: Session = Depends(get_db)):
     }
 
 @app.get("/teacher/ranking")
-def get_ranking(db: Session = Depends(get_db)):
+def get_ranking(teacher: models.User = Depends(get_current_teacher), db: Session = Depends(get_db)):
     users = db.query(models.User).filter(models.User.role == "student").all()
 
     ranking = []
@@ -306,12 +333,12 @@ def get_ranking(db: Session = Depends(get_db)):
     return ranking
 
 @app.get("/teacher/students")
-def get_students(db: Session = Depends(get_db)):
+def get_students(teacher: models.User = Depends(get_current_teacher), db: Session = Depends(get_db)):
     users = db.query(models.User).filter(models.User.role == "student").all()
     return [{"id": u.id, "username": u.username} for u in users]
 
 @app.get("/teacher/student/{user_id}/history")
-def get_student_history(user_id: int, db: Session = Depends(get_db)):
+def get_student_history(user_id: int, teacher: models.User = Depends(get_current_teacher), db: Session = Depends(get_db)):
     states = db.query(models.GameState).filter(
         models.GameState.user_id == user_id,
         models.GameState.is_settled == True

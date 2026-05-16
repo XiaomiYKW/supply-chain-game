@@ -14,6 +14,7 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     password_hash = Column(String)
     role = Column(String)  # student or teacher
+    auth_token = Column(String, index=True, unique=True, nullable=True)
 
     game_states = relationship("GameState", back_populates="user")
 
