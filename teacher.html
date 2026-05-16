@@ -6,17 +6,37 @@
     <title>供应链模拟游戏 - 教师端</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        .kpi {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-dark mb-4">
         <div class="container">
             <span class="navbar-brand">教师端 - 供应链模拟游戏</span>
-            <a href="index.html" class="btn btn-outline-light btn-sm">退出</a>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge rounded-pill text-bg-light border" id="backendStatusBadge">后端检测中</span>
+                <a href="index.html" class="btn btn-outline-light btn-sm">退出</a>
+            </div>
         </div>
     </nav>
 
     <div class="container">
-        <h2 class="mb-4">学生利润排行榜</h2>
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+            <div>
+                <h2 class="mb-1">学生利润排行榜</h2>
+                <div class="text-secondary small">支持按学生名快速筛选，点击查看详情可看历史曲线与每月数据。</div>
+            </div>
+            <div class="d-flex gap-2">
+                <input type="text" class="form-control" id="rankingSearch" placeholder="搜索学生名" style="max-width: 220px;">
+                <button class="btn btn-outline-primary" id="refreshRankingBtn" type="button">刷新</button>
+            </div>
+        </div>
+
+        <div class="alert alert-danger d-none" id="teacherError"></div>
+
         <div class="table-responsive mb-5">
             <table class="table table-striped table-hover">
                 <thead class="table-dark">
@@ -29,7 +49,12 @@
                     </tr>
                 </thead>
                 <tbody id="rankingTable">
-                    <tr><td colspan="5" class="text-center">加载中...</td></tr>
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-secondary">
+                            <div class="spinner-border" role="status" aria-hidden="true"></div>
+                            <div class="mt-2">加载中...</div>
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -64,40 +89,80 @@
     </div>
 
     <script>
-        const API_BASE_URL = window.location.hostname.includes('github.io') || window.location.hostname.includes('vercel.app')
-            ? 'https://supply-chain-game.onrender.com' 
-            : 'http://localhost:8005';
+        const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+            ? 'http://localhost:8005'
+            : 'https://supply-chain-game.onrender.com';
         let currentUserId = localStorage.getItem('userId');
         let profitChart = null;
+        let rankingCache = [];
+
+        function setBackendBadge(ok) {
+            const badge = document.getElementById('backendStatusBadge');
+            if (!badge) return;
+            if (ok) {
+                badge.className = 'badge rounded-pill text-bg-success';
+                badge.innerText = '后端正常';
+            } else {
+                badge.className = 'badge rounded-pill text-bg-danger';
+                badge.innerText = '后端不可用';
+            }
+        }
+
+        async function pingBackend() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/`, { method: 'GET' });
+                setBackendBadge(res.ok);
+            } catch {
+                setBackendBadge(false);
+            }
+        }
+
+        function renderRankingTable(data) {
+            const tbody = document.getElementById('rankingTable');
+            if (!tbody) return;
+            if (!data || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无学生数据</td></tr>';
+                return;
+            }
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td><span class="badge bg-primary">${r.rank}</span></td>
+                    <td>${r.username}</td>
+                    <td class="fw-bold kpi ${r.total_profit >= 0 ? 'text-success' : 'text-danger'}">¥${r.total_profit.toLocaleString()}</td>
+                    <td>${r.months_played} 月</td>
+                    <td>
+                        <button class="btn btn-sm btn-info" onclick="viewStudent(${r.user_id}, '${r.username.replaceAll("'", "\\'")}')">查看详情</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function applyRankingFilter() {
+            const q = (document.getElementById('rankingSearch')?.value || '').trim().toLowerCase();
+            if (!q) {
+                renderRankingTable(rankingCache);
+                return;
+            }
+            renderRankingTable(rankingCache.filter(r => (r.username || '').toLowerCase().includes(q)));
+        }
 
         async function loadRanking() {
+            const errorEl = document.getElementById('teacherError');
+            if (errorEl) errorEl.classList.add('d-none');
             try {
                 const response = await fetch(`${API_BASE_URL}/teacher/ranking`);
+                if (!response.ok) {
+                    throw new Error('ranking api failed');
+                }
                 const data = await response.json();
 
-                const tbody = document.getElementById('rankingTable');
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无学生数据</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.map(r => `
-                    <tr>
-                        <td><span class="badge bg-primary">${r.rank}</span></td>
-                        <td>${r.username}</td>
-                        <td class="fw-bold ${r.total_profit >= 0 ? 'text-success' : 'text-danger'}">
-                            ¥${r.total_profit.toLocaleString()}
-                        </td>
-                        <td>${r.months_played} 月</td>
-                        <td>
-                            <button class="btn btn-sm btn-info" onclick="viewStudent(${r.user_id}, '${r.username}')">
-                                查看详情
-                            </button>
-                        </td>
-                    </tr>
-                `).join('');
+                rankingCache = data || [];
+                applyRankingFilter();
             } catch (error) {
-                console.error('加载排名失败:', error);
+                if (errorEl) {
+                    errorEl.innerText = '加载排行榜失败，请检查后端是否可访问（Render 免费版可能在休眠，稍等后刷新）。';
+                    errorEl.classList.remove('d-none');
+                }
             }
         }
 
@@ -198,6 +263,16 @@
         }
 
         document.addEventListener('DOMContentLoaded', loadRanking);
+        document.addEventListener('DOMContentLoaded', pingBackend);
+        document.getElementById('rankingSearch')?.addEventListener('input', applyRankingFilter);
+        document.getElementById('refreshRankingBtn')?.addEventListener('click', () => {
+            const tbody = document.getElementById('rankingTable');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-secondary"><div class="spinner-border" role="status" aria-hidden="true"></div><div class="mt-2">加载中...</div></td></tr>';
+            }
+            loadRanking();
+            pingBackend();
+        });
     </script>
 </body>
 </html>

@@ -1,11 +1,12 @@
-// 云端部署地址
-const API_BASE_URL = window.location.hostname.includes('github.io') || window.location.hostname.includes('vercel.app')
-    ? 'https://supply-chain-game.onrender.com' 
-    : 'http://localhost:8005';
+// 自动识别环境：如果是本地访问则连本地，如果是云端访问则连 Render 后端
+const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://localhost:8005'
+    : 'https://supply-chain-game.onrender.com';
 
 let currentUserId = localStorage.getItem('userId') || null;
 let currentUsername = localStorage.getItem('username') || '';
 let currentRole = localStorage.getItem('role') || 'student';
+let latestState = null;
 
 function logout() {
     localStorage.removeItem('userId');
@@ -23,6 +24,15 @@ if (loginForm) {
         const password = document.getElementById('password').value;
 
         try {
+            const errorEl = document.getElementById('loginError');
+            if (errorEl) errorEl.classList.add('d-none');
+            const btn = document.getElementById('loginBtn');
+            const spinner = document.getElementById('loginSpinner');
+            const btnText = document.getElementById('loginBtnText');
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.classList.remove('d-none');
+            if (btnText) btnText.innerText = '处理中...';
+
             let response = await fetch(`${API_BASE_URL}/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -52,10 +62,31 @@ if (loginForm) {
                 } else {
                     window.location.href = 'decision.html';
                 }
+            } else {
+                const errorEl2 = document.getElementById('loginError');
+                if (errorEl2) {
+                    errorEl2.innerText = '登录失败：账号或服务状态异常。';
+                    errorEl2.classList.remove('d-none');
+                } else {
+                    alert('登录失败：账号或服务状态异常。');
+                }
             }
         } catch (error) {
             console.error('操作失败:', error);
-            alert('操作失败，请确保后端已启动');
+            const errorEl = document.getElementById('loginError');
+            if (errorEl) {
+                errorEl.innerText = '操作失败，请检查后端是否可访问（云端服务可能在休眠，稍等后刷新重试）。';
+                errorEl.classList.remove('d-none');
+            } else {
+                alert('操作失败，请确保后端已启动');
+            }
+        } finally {
+            const btn = document.getElementById('loginBtn');
+            const spinner = document.getElementById('loginSpinner');
+            const btnText = document.getElementById('loginBtnText');
+            if (btn) btn.disabled = false;
+            if (spinner) spinner.classList.add('d-none');
+            if (btnText) btnText.innerText = '登录 / 注册';
         }
     });
 }
@@ -80,11 +111,41 @@ if (decisionForm) {
         };
 
         try {
-            await fetch(`${API_BASE_URL}/submit_decision`, {
+            const errorEl = document.getElementById('decisionError');
+            if (errorEl) errorEl.classList.add('d-none');
+            const btn = document.getElementById('submitDecisionBtn');
+            const spinner = document.getElementById('decisionSpinner');
+            const btnText = document.getElementById('submitDecisionText');
+            if (btn) btn.disabled = true;
+            if (spinner) spinner.classList.remove('d-none');
+            if (btnText) btnText.innerText = '提交中...';
+
+            const submitRes = await fetch(`${API_BASE_URL}/submit_decision`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(decisionData)
             });
+
+            const submitJson = await submitRes.json().catch(() => null);
+            if (!submitRes.ok) {
+                const detail = submitJson && submitJson.detail ? submitJson.detail : '提交失败';
+                const errorEl2 = document.getElementById('decisionError');
+                if (errorEl2) {
+                    errorEl2.innerText = detail;
+                    errorEl2.classList.remove('d-none');
+                } else {
+                    alert(detail);
+                }
+                return;
+            }
+
+            if (submitJson && submitJson.adjusted) {
+                alert(
+                    `现金不足，系统已自动调整采购量。\n` +
+                    `供应商1: ${submitJson.accepted.purchase_supplier_1}\n` +
+                    `供应商2: ${submitJson.accepted.purchase_supplier_2}`
+                );
+            }
 
             const settleRes = await fetch(`${API_BASE_URL}/settle_month/${currentUserId}`, {
                 method: 'POST'
@@ -94,11 +155,31 @@ if (decisionForm) {
                 window.location.href = 'report.html';
             } else {
                 const err = await settleRes.json();
-                alert('提交失败: ' + err.detail);
+                const msg = '结算失败: ' + (err && err.detail ? err.detail : '请稍后重试');
+                const errorEl2 = document.getElementById('decisionError');
+                if (errorEl2) {
+                    errorEl2.innerText = msg;
+                    errorEl2.classList.remove('d-none');
+                } else {
+                    alert(msg);
+                }
             }
         } catch (error) {
             console.error('提交失败:', error);
-            alert('提交决策失败');
+            const errorEl = document.getElementById('decisionError');
+            if (errorEl) {
+                errorEl.innerText = '提交失败，请检查网络或后端状态后重试。';
+                errorEl.classList.remove('d-none');
+            } else {
+                alert('提交决策失败');
+            }
+        } finally {
+            const btn = document.getElementById('submitDecisionBtn');
+            const spinner = document.getElementById('decisionSpinner');
+            const btnText = document.getElementById('submitDecisionText');
+            if (btn) btn.disabled = false;
+            if (spinner) spinner.classList.add('d-none');
+            if (btnText) btnText.innerText = '提交并结算';
         }
     });
 }
@@ -114,6 +195,7 @@ async function loadGameState() {
         }
 
         const state = await response.json();
+        latestState = state;
 
         const userInfo = document.getElementById('userInfo');
         if (userInfo) {
@@ -226,6 +308,28 @@ async function loadHistoryChart() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    const apiBaseRow = document.getElementById('apiBaseRow');
+    if (apiBaseRow) apiBaseRow.remove();
+
+    const backendBadge = document.getElementById('backendStatusBadge');
+    if (backendBadge) {
+        fetch(`${API_BASE_URL}/`, { method: 'GET' })
+            .then(r => {
+                if (!backendBadge) return;
+                if (r.ok) {
+                    backendBadge.className = 'badge rounded-pill text-bg-success';
+                    backendBadge.innerText = '后端正常';
+                } else {
+                    backendBadge.className = 'badge rounded-pill text-bg-danger';
+                    backendBadge.innerText = '后端不可用';
+                }
+            })
+            .catch(() => {
+                backendBadge.className = 'badge rounded-pill text-bg-danger';
+                backendBadge.innerText = '后端不可用';
+            });
+    }
+
     if (document.getElementById('actualDemand')) {
         loadReport();
     } else if (document.getElementById('currentCash')) {
@@ -235,5 +339,49 @@ document.addEventListener('DOMContentLoaded', () => {
     const logoutBtn = document.getElementById('logoutBtn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', logout);
+    }
+
+    const quickSafeBtn = document.getElementById('quickSafeBtn');
+    const quickConservativeBtn = document.getElementById('quickConservativeBtn');
+    const quickAggressiveBtn = document.getElementById('quickAggressiveBtn');
+    if (quickSafeBtn || quickConservativeBtn || quickAggressiveBtn) {
+        const fill = (mode) => {
+            const raw = latestState ? Number(latestState.raw_material_stock || 0) : 0;
+            const fg = latestState ? Number(latestState.finished_goods_stock || 0) : 0;
+
+            let forecast = 400;
+            let production = 300;
+            let p1 = 400;
+            let p2 = 0;
+
+            if (mode === 'conservative') {
+                forecast = Math.max(200, Math.round(fg * 0.8));
+                production = Math.min(raw, 200);
+                p1 = 200;
+                p2 = 0;
+            } else if (mode === 'aggressive') {
+                forecast = Math.max(500, Math.round(fg + 300));
+                production = Math.min(raw, 500);
+                p1 = 600;
+                p2 = 100;
+            } else {
+                forecast = Math.max(300, Math.round(fg + 200));
+                production = Math.min(raw, 400);
+                p1 = 500;
+                p2 = 0;
+            }
+
+            const fd = document.getElementById('forecastDemand');
+            const pq = document.getElementById('productionQuantity');
+            const pp1 = document.getElementById('purchase1');
+            const pp2 = document.getElementById('purchase2');
+            if (fd) fd.value = String(Math.max(0, Math.round(forecast)));
+            if (pq) pq.value = String(Math.max(0, Math.round(production)));
+            if (pp1) pp1.value = String(Math.max(0, Math.round(p1)));
+            if (pp2) pp2.value = String(Math.max(0, Math.round(p2)));
+        };
+        quickSafeBtn?.addEventListener('click', () => fill('safe'));
+        quickConservativeBtn?.addEventListener('click', () => fill('conservative'));
+        quickAggressiveBtn?.addEventListener('click', () => fill('aggressive'));
     }
 });

@@ -3,12 +3,44 @@ import database
 import game_logic
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
 from collections import defaultdict
 
 models.Base.metadata.create_all(bind=database.engine)
+
+def ensure_schema():
+    desired = {
+        "raw_warehouse_capacity": ("FLOAT", "2000"),
+        "fg_warehouse_capacity": ("FLOAT", "1500"),
+        "raw_overflow_cost": ("FLOAT", "10"),
+        "fg_overflow_cost": ("FLOAT", "20"),
+    }
+
+    engine = database.engine
+    with engine.begin() as conn:
+        if engine.dialect.name == "sqlite":
+            rows = conn.execute(text("PRAGMA table_info(game_config)")).fetchall()
+            existing = {r[1] for r in rows}
+            for col, (col_type, default_value) in desired.items():
+                if col in existing:
+                    continue
+                conn.execute(
+                    text(
+                        f"ALTER TABLE game_config ADD COLUMN {col} {col_type} DEFAULT {default_value}"
+                    )
+                )
+        else:
+            for col, (col_type, default_value) in desired.items():
+                conn.execute(
+                    text(
+                        f"ALTER TABLE game_config ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default_value}"
+                    )
+                )
+
+ensure_schema()
 
 app = FastAPI(title="Supply Chain Game API")
 
@@ -74,6 +106,8 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
             selling_price=100, supplier1_price=40, supplier1_lead_time=1,
             supplier2_price=60, supplier2_lead_time=0, factory_capacity=1000,
             raw_holding_cost=2, fg_holding_cost=5,
+            raw_warehouse_capacity=2000, fg_warehouse_capacity=1500,
+            raw_overflow_cost=10, fg_overflow_cost=20,
             initial_cash=100000, initial_raw_stock=500, initial_fg_stock=200
         )
         db.add(config)
@@ -142,14 +176,60 @@ def submit_decision(decision: DecisionSubmit, db: Session = Depends(get_db)):
     if not state:
         raise HTTPException(status_code=400, detail="No active month found or decision already submitted")
 
+    if decision.forecast_demand < 0:
+        raise HTTPException(status_code=400, detail="forecast_demand must be >= 0")
+    if decision.purchase_supplier_1 < 0 or decision.purchase_supplier_2 < 0:
+        raise HTTPException(status_code=400, detail="purchase quantity must be >= 0")
+    if decision.production_quantity < 0:
+        raise HTTPException(status_code=400, detail="production_quantity must be >= 0")
+
+    config = db.query(models.GameConfig).first()
+    if not config:
+        raise HTTPException(status_code=500, detail="game_config not initialized")
+
+    cash = state.cash or 0
+    requested_p1 = decision.purchase_supplier_1
+    requested_p2 = decision.purchase_supplier_2
+
+    if cash <= 0 and (requested_p1 > 0 or requested_p2 > 0):
+        raise HTTPException(status_code=400, detail="Insufficient cash to purchase")
+
+    accepted_p2 = requested_p2
+    accepted_p1 = requested_p1
+
+    if config.supplier2_price and config.supplier2_price > 0:
+        accepted_p2 = min(requested_p2, cash / config.supplier2_price)
+    cost_p2 = accepted_p2 * (config.supplier2_price or 0)
+    remaining_cash = cash - cost_p2
+
+    if remaining_cash < 0:
+        remaining_cash = 0
+
+    if config.supplier1_price and config.supplier1_price > 0:
+        accepted_p1 = min(requested_p1, remaining_cash / config.supplier1_price)
+
+    adjusted = (accepted_p1 != requested_p1) or (accepted_p2 != requested_p2)
+
     state.forecast_demand = decision.forecast_demand
-    state.purchase_supplier_1 = decision.purchase_supplier_1
-    state.purchase_supplier_2 = decision.purchase_supplier_2
-    state.production_quantity = decision.production_quantity
+    state.purchase_supplier_1 = accepted_p1
+    state.purchase_supplier_2 = accepted_p2
+    state.production_quantity = min(decision.production_quantity, config.factory_capacity or decision.production_quantity)
     state.is_submitted = True
 
     db.commit()
-    return {"message": "Decision submitted successfully", "month": state.month}
+    return {
+        "message": "Decision submitted successfully",
+        "month": state.month,
+        "adjusted": adjusted,
+        "requested": {
+            "purchase_supplier_1": requested_p1,
+            "purchase_supplier_2": requested_p2,
+        },
+        "accepted": {
+            "purchase_supplier_1": accepted_p1,
+            "purchase_supplier_2": accepted_p2,
+        },
+    }
 
 @app.post("/settle_month/{user_id}")
 def settle_month(user_id: int, db: Session = Depends(get_db)):

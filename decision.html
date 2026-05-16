@@ -5,6 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>供应链模拟游戏 - 决策</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .kpi {
+            font-variant-numeric: tabular-nums;
+        }
+        .card-title-sm {
+            font-size: 0.95rem;
+            margin-bottom: 0.25rem;
+        }
+    </style>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-dark bg-dark mb-4">
@@ -13,49 +22,99 @@
             <div class="d-flex">
                 <span class="text-light me-3" id="userInfo">学生: - | 第 1 月</span>
                 <button id="logoutBtn" class="btn btn-outline-light btn-sm me-2">退出</button>
-                <a href="index.html" class="btn btn-outline-light btn-sm">退出</a>
             </div>
         </div>
     </nav>
 
     <div class="container">
-        <div class="row">
-            <div class="col-md-4">
-                <div class="card mb-4">
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card border-0 shadow-sm mb-4">
                     <div class="card-header bg-info text-white">当前状态</div>
                     <div class="card-body">
-                        <p>现金: <span id="currentCash">¥100,000</span></p>
-                        <p>原材料库存: <span id="rawStock">500</span></p>
-                        <p>成品库存: <span id="fgStock">200</span></p>
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <div class="p-3 rounded-3 border bg-white">
+                                    <div class="text-secondary small">现金</div>
+                                    <div class="h4 mb-0 kpi" id="currentCash">¥0</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">原材料</div>
+                                    <div class="h5 mb-0 kpi" id="rawStock">0</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">成品</div>
+                                    <div class="h5 mb-0 kpi" id="fgStock">0</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-light border mt-3 mb-0 small">
+                            <div class="fw-semibold mb-1">规则提示</div>
+                            <div>供应商1：便宜，1 个月后到货</div>
+                            <div>供应商2：贵，当月到货可用于生产</div>
+                            <div>现金不足会自动下调采购量</div>
+                            <div>库存超上限将产生超额成本</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-light">快捷填写</div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" type="button" id="quickSafeBtn">稳健策略</button>
+                            <button class="btn btn-outline-secondary" type="button" id="quickConservativeBtn">保守策略</button>
+                            <button class="btn btn-outline-success" type="button" id="quickAggressiveBtn">进取策略</button>
+                        </div>
+                        <div class="text-secondary small mt-2">将依据当前库存自动填入一组可运行的参考值。</div>
                     </div>
                 </div>
             </div>
-            <div class="col-md-8">
-                <div class="card">
-                    <div class="card-header bg-primary text-white">本月决策</div>
-                    <div class="card-body">
+
+            <div class="col-lg-8">
+                <div class="card border-0 shadow">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <span>本月决策</span>
+                        <span class="small opacity-75" id="decisionHint">提交后自动结算并生成下月</span>
+                    </div>
+                    <div class="card-body p-4">
+                        <div class="alert alert-danger d-none" id="decisionError"></div>
                         <form id="decisionForm">
-                            <div class="row mb-3">
-                                <div class="col">
+                            <div class="row g-3">
+                                <div class="col-md-6">
                                     <label class="form-label">需求预测</label>
-                                    <input type="number" class="form-control" id="forecastDemand" required>
+                                    <input type="number" class="form-control" id="forecastDemand" required min="0" step="1" placeholder="例如：400">
+                                    <div class="form-text">系统将基于预测产生 0.8~1.2 倍波动的实际需求。</div>
                                 </div>
-                                <div class="col">
+                                <div class="col-md-6">
                                     <label class="form-label">生产数量</label>
-                                    <input type="number" class="form-control" id="productionQuantity" required>
+                                    <input type="number" class="form-control" id="productionQuantity" required min="0" step="1" placeholder="例如：300">
+                                    <div class="form-text">受原材料、当月到货与产能约束，实际产量可能低于计划。</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">供应商1采购（下月到货）</label>
+                                    <input type="number" class="form-control" id="purchase1" min="0" step="1" placeholder="例如：500">
+                                    <div class="form-text">适合做计划性补货。</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">供应商2采购（当月到货）</label>
+                                    <input type="number" class="form-control" id="purchase2" min="0" step="1" placeholder="例如：0">
+                                    <div class="form-text">适合应急补货，现金不足会自动下调。</div>
                                 </div>
                             </div>
-                            <div class="row mb-3">
-                                <div class="col">
-                                    <label class="form-label">供应商1采购 (前置期1月)</label>
-                                    <input type="number" class="form-control" id="purchase1">
-                                </div>
-                                <div class="col">
-                                    <label class="form-label">供应商2采购 (前置期0月)</label>
-                                    <input type="number" class="form-control" id="purchase2">
-                                </div>
+
+                            <div class="d-flex gap-2 mt-4">
+                                <button type="submit" class="btn btn-success" id="submitDecisionBtn">
+                                    <span class="spinner-border spinner-border-sm me-2 d-none" id="decisionSpinner" aria-hidden="true"></span>
+                                    <span id="submitDecisionText">提交并结算</span>
+                                </button>
+                                <a href="report.html" class="btn btn-outline-secondary">查看最近报告</a>
                             </div>
-                            <button type="submit" class="btn btn-success">提交决策</button>
                         </form>
                     </div>
                 </div>
