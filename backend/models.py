@@ -41,6 +41,12 @@ class GameState(Base):
     actual_sales = Column(Float)            # 实际销售 = min(成品库存, 实际需求)
     revenue = Column(Float)                 # 收入
     total_cost = Column(Float)              # 总成本
+    purchase_cost = Column(Float)           # 采购成本
+    holding_cost = Column(Float)            # 库存持有成本
+    overflow_cost = Column(Float)           # 超额成本
+    fixed_cost = Column(Float)              # 固定成本
+    stockout_cost = Column(Float)           # 缺货惩罚成本
+    interest_cost = Column(Float)           # 负现金利息成本
     profit = Column(Float)                  # 本月利润
     
     is_submitted = Column(Boolean, default=False)  # 是否已提交决策
@@ -64,6 +70,11 @@ class GameConfig(Base):
     fg_warehouse_capacity = Column(Float)
     raw_overflow_cost = Column(Float)
     fg_overflow_cost = Column(Float)
+    demand_variation_low = Column(Float)
+    demand_variation_high = Column(Float)
+    fixed_cost_per_month = Column(Float)
+    stockout_penalty_per_unit = Column(Float)
+    negative_cash_interest_rate = Column(Float)
     initial_cash = Column(Float)
     initial_raw_stock = Column(Float)
     initial_fg_stock = Column(Float)

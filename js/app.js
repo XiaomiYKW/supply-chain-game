@@ -234,9 +234,26 @@ async function loadReport() {
             document.getElementById('actualSales').innerText = state.actual_sales || '-';
             document.getElementById('revenue').innerText = `¥${(state.revenue || 0).toLocaleString()}`;
             document.getElementById('totalCost').innerText = `¥${(state.total_cost || 0).toLocaleString()}`;
+            const purchaseCostEl = document.getElementById('purchaseCost');
+            if (purchaseCostEl) purchaseCostEl.innerText = `¥${(state.purchase_cost || 0).toLocaleString()}`;
+            const holdingCostEl = document.getElementById('holdingCost');
+            if (holdingCostEl) holdingCostEl.innerText = `¥${(state.holding_cost || 0).toLocaleString()}`;
+            const overflowCostEl = document.getElementById('overflowCost');
+            if (overflowCostEl) overflowCostEl.innerText = `¥${(state.overflow_cost || 0).toLocaleString()}`;
+            const fixedCostEl = document.getElementById('fixedCost');
+            if (fixedCostEl) fixedCostEl.innerText = `¥${(state.fixed_cost || 0).toLocaleString()}`;
+            const stockoutCostEl = document.getElementById('stockoutCost');
+            if (stockoutCostEl) stockoutCostEl.innerText = `¥${(state.stockout_cost || 0).toLocaleString()}`;
+            const interestCostEl = document.getElementById('interestCost');
+            if (interestCostEl) interestCostEl.innerText = `¥${(state.interest_cost || 0).toLocaleString()}`;
             const profitEl = document.getElementById('profit');
             profitEl.innerText = `¥${(state.profit || 0).toLocaleString()}`;
             profitEl.className = state.profit >= 0 ? 'fw-bold text-success' : 'fw-bold text-danger';
+            const cumulativeEl = document.getElementById('cumulativeProfit');
+            if (cumulativeEl) {
+                cumulativeEl.innerText = `¥${(state.cumulative_profit || 0).toLocaleString()}`;
+                cumulativeEl.className = (state.cumulative_profit || 0) >= 0 ? 'h4 mb-0 kpi fw-semibold text-success' : 'h4 mb-0 kpi fw-semibold text-danger';
+            }
         }
 
         loadHistoryChart();
@@ -310,6 +327,35 @@ async function loadHistoryChart() {
                 }
             }
         });
+
+        const tbody = document.getElementById('monthlyBreakdownTable');
+        if (tbody) {
+            let running = 0;
+            tbody.innerHTML = data.map(s => {
+                const profit = Number(s.profit || 0);
+                const cumulative = (s.cumulative_profit !== undefined && s.cumulative_profit !== null)
+                    ? Number(s.cumulative_profit || 0)
+                    : (running += profit);
+                if (s.cumulative_profit === undefined || s.cumulative_profit === null) {
+                    running = cumulative;
+                }
+                return `
+                    <tr>
+                        <td>第 ${s.month} 月</td>
+                        <td class="kpi">¥${Number(s.revenue || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.purchase_cost || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.holding_cost || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.overflow_cost || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.fixed_cost || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.stockout_cost || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.interest_cost || 0).toLocaleString()}</td>
+                        <td class="kpi">¥${Number(s.total_cost || 0).toLocaleString()}</td>
+                        <td class="kpi ${profit >= 0 ? 'text-success' : 'text-danger'}">¥${profit.toLocaleString()}</td>
+                        <td class="kpi ${cumulative >= 0 ? 'text-success' : 'text-danger'}">¥${cumulative.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
     } catch (error) {
         console.error('加载历史图表失败:', error);
     }

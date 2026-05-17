@@ -77,15 +77,57 @@
                                     <div class="h4 mb-0 kpi" id="totalCost">¥0</div>
                                 </div>
                             </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">采购成本</div>
+                                    <div class="h5 mb-0 kpi" id="purchaseCost">¥0</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">持有成本</div>
+                                    <div class="h5 mb-0 kpi" id="holdingCost">¥0</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">超额成本</div>
+                                    <div class="h5 mb-0 kpi" id="overflowCost">¥0</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">固定成本</div>
+                                    <div class="h5 mb-0 kpi" id="fixedCost">¥0</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">缺货惩罚</div>
+                                    <div class="h5 mb-0 kpi" id="stockoutCost">¥0</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">负现金利息</div>
+                                    <div class="h5 mb-0 kpi" id="interestCost">¥0</div>
+                                </div>
+                            </div>
                             <div class="col-12">
                                 <div class="p-3 rounded-3 border bg-white">
                                     <div class="text-secondary small">本月利润</div>
                                     <div class="h3 mb-0 kpi fw-semibold" id="profit">¥0</div>
                                 </div>
                             </div>
+                            <div class="col-12">
+                                <div class="p-3 rounded-3 border bg-white">
+                                    <div class="text-secondary small">累计总利润</div>
+                                    <div class="h4 mb-0 kpi fw-semibold" id="cumulativeProfit">¥0</div>
+                                </div>
+                            </div>
                         </div>
                         <div class="alert alert-light border mt-3 mb-0 small">
-                            总成本包含采购成本、库存持有成本，以及库存超仓的超额成本（如有）。
+                            总成本包含采购成本、库存持有成本、库存超仓超额成本，以及固定成本/缺货惩罚/负现金利息（如启用）。
                         </div>
                     </div>
                 </div>
@@ -100,6 +142,32 @@
             <div class="card-body">
                 <canvas id="historyChart" height="110"></canvas>
                 <div class="text-secondary small mt-2">趋势图来自历史已结算月份，可用于判断策略是否稳定。</div>
+            </div>
+        </div>
+
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-secondary text-white">月度明细（已结算月份）</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th>月份</th>
+                                <th>收益(收入)</th>
+                                <th>采购成本</th>
+                                <th>持有成本</th>
+                                <th>超额成本</th>
+                                <th>固定成本</th>
+                                <th>缺货惩罚</th>
+                                <th>负现金利息</th>
+                                <th>总成本</th>
+                                <th>利润</th>
+                                <th>累计利润</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthlyBreakdownTable"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>

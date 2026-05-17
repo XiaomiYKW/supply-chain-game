@@ -18,6 +18,19 @@ def ensure_schema():
         "fg_warehouse_capacity": ("FLOAT", "1500"),
         "raw_overflow_cost": ("FLOAT", "10"),
         "fg_overflow_cost": ("FLOAT", "20"),
+        "demand_variation_low": ("FLOAT", "0.7"),
+        "demand_variation_high": ("FLOAT", "1.3"),
+        "fixed_cost_per_month": ("FLOAT", "3000"),
+        "stockout_penalty_per_unit": ("FLOAT", "10"),
+        "negative_cash_interest_rate": ("FLOAT", "0.02"),
+    }
+    desired_game_state = {
+        "purchase_cost": ("FLOAT", "0"),
+        "holding_cost": ("FLOAT", "0"),
+        "overflow_cost": ("FLOAT", "0"),
+        "fixed_cost": ("FLOAT", "0"),
+        "stockout_cost": ("FLOAT", "0"),
+        "interest_cost": ("FLOAT", "0"),
     }
 
     engine = database.engine
@@ -34,10 +47,19 @@ def ensure_schema():
             user_existing = {r[1] for r in user_rows}
             if "auth_token" not in user_existing:
                 conn.execute(text("ALTER TABLE users ADD COLUMN auth_token TEXT"))
+
+            state_rows = conn.execute(text("PRAGMA table_info(game_state)")).fetchall()
+            state_existing = {r[1] for r in state_rows}
+            for col, (col_type, default_value) in desired_game_state.items():
+                if col in state_existing:
+                    continue
+                conn.execute(text(f"ALTER TABLE game_state ADD COLUMN {col} {col_type} DEFAULT {default_value}"))
         else:
             for col, (col_type, default_value) in desired_game_config.items():
                 conn.execute(text(f"ALTER TABLE game_config ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default_value}"))
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_token VARCHAR(64)"))
+            for col, (col_type, default_value) in desired_game_state.items():
+                conn.execute(text(f"ALTER TABLE game_state ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default_value}"))
 
 ensure_schema()
 
@@ -78,6 +100,43 @@ def get_current_teacher(user: models.User = Depends(get_current_user)) -> models
     if user.role != "teacher":
         raise HTTPException(status_code=403, detail="Teacher access required")
     return user
+
+def compute_cost_breakdown(state: models.GameState, config: models.GameConfig):
+    purchase_supplier_1 = state.purchase_supplier_1 or 0
+    purchase_supplier_2 = state.purchase_supplier_2 or 0
+
+    available_raw = (state.raw_material_stock or 0) + purchase_supplier_2
+    actual_production = min(
+        state.production_quantity or 0,
+        available_raw,
+        config.factory_capacity
+    )
+    available_fg = (state.finished_goods_stock or 0) + actual_production
+    actual_sales = state.actual_sales if state.actual_sales is not None else min(available_fg, state.actual_demand or 0)
+
+    end_raw = available_raw - actual_production
+    end_fg = available_fg - actual_sales
+
+    purchase_cost = purchase_supplier_1 * (config.supplier1_price or 0) + purchase_supplier_2 * (config.supplier2_price or 0)
+    holding_cost = end_raw * (config.raw_holding_cost or 0) + end_fg * (config.fg_holding_cost or 0)
+
+    overflow_raw_units = max(0, end_raw - (config.raw_warehouse_capacity or 0)) if config.raw_warehouse_capacity is not None else 0
+    overflow_fg_units = max(0, end_fg - (config.fg_warehouse_capacity or 0)) if config.fg_warehouse_capacity is not None else 0
+    overflow_cost = overflow_raw_units * (config.raw_overflow_cost or 0) + overflow_fg_units * (config.fg_overflow_cost or 0)
+
+    fixed_cost = float(config.fixed_cost_per_month or 0)
+    stockout_units = max(0, (state.actual_demand or 0) - (actual_sales or 0))
+    stockout_cost = float(stockout_units * (config.stockout_penalty_per_unit or 0))
+    interest_cost = float(max(0, -(state.cash or 0)) * (config.negative_cash_interest_rate or 0))
+
+    return {
+        "purchase_cost": float(purchase_cost),
+        "holding_cost": float(holding_cost),
+        "overflow_cost": float(overflow_cost),
+        "fixed_cost": fixed_cost,
+        "stockout_cost": stockout_cost,
+        "interest_cost": interest_cost,
+    }
 
 class DecisionSubmit(BaseModel):
     user_id: int
@@ -135,6 +194,9 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
             raw_holding_cost=2, fg_holding_cost=5,
             raw_warehouse_capacity=2000, fg_warehouse_capacity=1500,
             raw_overflow_cost=10, fg_overflow_cost=20,
+            demand_variation_low=0.7, demand_variation_high=1.3,
+            fixed_cost_per_month=3000, stockout_penalty_per_unit=10,
+            negative_cash_interest_rate=0.02,
             initial_cash=100000, initial_raw_stock=500, initial_fg_stock=200
         )
         db.add(config)
@@ -164,25 +226,48 @@ def get_game_state(user_id: int, db: Session = Depends(get_db)):
 
 @app.get("/history/{user_id}")
 def get_history(user_id: int, db: Session = Depends(get_db)):
+    config = db.query(models.GameConfig).first()
+    if not config:
+        raise HTTPException(status_code=500, detail="game_config not initialized")
     states = db.query(models.GameState).filter(
         models.GameState.user_id == user_id,
         models.GameState.is_settled == True
     ).order_by(models.GameState.month.asc()).all()
 
-    return [{
-        "month": s.month,
-        "profit": s.profit,
-        "revenue": s.revenue,
-        "total_cost": s.total_cost,
-        "actual_demand": s.actual_demand,
-        "actual_sales": s.actual_sales,
-        "cash": s.cash,
-        "raw_material_stock": s.raw_material_stock,
-        "finished_goods_stock": s.finished_goods_stock
-    } for s in states]
+    result = []
+    cumulative_profit = 0.0
+    for s in states:
+        breakdown = compute_cost_breakdown(s, config) if (
+            s.purchase_cost is None or s.holding_cost is None or s.overflow_cost is None
+            or s.fixed_cost is None or s.stockout_cost is None or s.interest_cost is None
+        ) else None
+        profit_value = float(s.profit or 0)
+        cumulative_profit += profit_value
+        result.append({
+            "month": s.month,
+            "profit": s.profit,
+            "cumulative_profit": cumulative_profit,
+            "revenue": s.revenue,
+            "total_cost": s.total_cost,
+            "purchase_cost": s.purchase_cost if s.purchase_cost is not None else (breakdown["purchase_cost"] if breakdown else 0.0),
+            "holding_cost": s.holding_cost if s.holding_cost is not None else (breakdown["holding_cost"] if breakdown else 0.0),
+            "overflow_cost": s.overflow_cost if s.overflow_cost is not None else (breakdown["overflow_cost"] if breakdown else 0.0),
+            "fixed_cost": s.fixed_cost if s.fixed_cost is not None else (breakdown["fixed_cost"] if breakdown else 0.0),
+            "stockout_cost": s.stockout_cost if s.stockout_cost is not None else (breakdown["stockout_cost"] if breakdown else 0.0),
+            "interest_cost": s.interest_cost if s.interest_cost is not None else (breakdown["interest_cost"] if breakdown else 0.0),
+            "actual_demand": s.actual_demand,
+            "actual_sales": s.actual_sales,
+            "cash": s.cash,
+            "raw_material_stock": s.raw_material_stock,
+            "finished_goods_stock": s.finished_goods_stock
+        })
+    return result
 
 @app.get("/report/{user_id}")
 def get_report(user_id: int, db: Session = Depends(get_db)):
+    config = db.query(models.GameConfig).first()
+    if not config:
+        raise HTTPException(status_code=500, detail="game_config not initialized")
     report = db.query(models.GameState).filter(
         models.GameState.user_id == user_id,
         models.GameState.is_settled == True
@@ -190,7 +275,30 @@ def get_report(user_id: int, db: Session = Depends(get_db)):
 
     if not report:
         raise HTTPException(status_code=404, detail="No settled report found")
-    return report
+    cumulative_profit = db.query(models.GameState).filter(
+        models.GameState.user_id == user_id,
+        models.GameState.is_settled == True
+    ).with_entities(models.GameState.profit).all()
+    cumulative_profit_value = float(sum((p[0] or 0) for p in cumulative_profit))
+    breakdown = compute_cost_breakdown(report, config)
+    return {
+        "month": report.month,
+        "profit": report.profit,
+        "cumulative_profit": cumulative_profit_value,
+        "revenue": report.revenue,
+        "total_cost": report.total_cost,
+        "purchase_cost": report.purchase_cost if report.purchase_cost is not None else breakdown["purchase_cost"],
+        "holding_cost": report.holding_cost if report.holding_cost is not None else breakdown["holding_cost"],
+        "overflow_cost": report.overflow_cost if report.overflow_cost is not None else breakdown["overflow_cost"],
+        "fixed_cost": report.fixed_cost if report.fixed_cost is not None else breakdown["fixed_cost"],
+        "stockout_cost": report.stockout_cost if report.stockout_cost is not None else breakdown["stockout_cost"],
+        "interest_cost": report.interest_cost if report.interest_cost is not None else breakdown["interest_cost"],
+        "actual_demand": report.actual_demand,
+        "actual_sales": report.actual_sales,
+        "cash": report.cash,
+        "raw_material_stock": report.raw_material_stock,
+        "finished_goods_stock": report.finished_goods_stock,
+    }
 
 @app.post("/submit_decision")
 def submit_decision(decision: DecisionSubmit, db: Session = Depends(get_db)):
