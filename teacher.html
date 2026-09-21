@@ -531,15 +531,44 @@
             tbody.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => delStu(parseInt(b.dataset.del))));
         }
         async function resetStuPwd(uid) {
-            if (!confirm('确定将此学生密码重置为 123456？')) return;
-            await fetch(`${API_BASE_URL}/teacher/students/${uid}/reset-password`, {method:'POST', headers: headers(), body: JSON.stringify({password:'123456'})});
-            alert('重置成功');
-            loadStudentList();
+            if (!confirm('确定将此学生密码重置为 123456？（重置后请告知学生用新密码登录）')) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/teacher/students/${uid}/reset-password`, {
+                    method: 'PUT',
+                    headers: headers(),
+                    body: JSON.stringify({password: '123456'})
+                });
+                if (checkAuthAndRedirect(res)) return;
+                if (!res.ok) {
+                    let msg = `重置失败（HTTP ${res.status}）`;
+                    try { const e = await res.json(); if (e && e.detail) msg += `：${e.detail}`; } catch(_) {}
+                    alert(msg);
+                    return;
+                }
+                const data = await res.json().catch(() => ({}));
+                const username = data && data.username ? `「${data.username}」` : '';
+                alert(`密码重置成功！${username} 新密码：123456（请提醒学生登录后自行记录）`);
+                loadStudentList();
+            } catch(e) {
+                alert(`密码重置网络失败：${e.message || e}`);
+            }
         }
         async function delStu(uid) {
-            if (!confirm('确定删除该学生账号？（含所有历史数据）')) return;
-            await fetch(`${API_BASE_URL}/teacher/students/${uid}`, {method:'DELETE', headers: headers()});
-            loadStudentList(); loadRanking();
+            if (!confirm('确定删除该学生账号？（含所有历史游戏数据，此操作不可恢复）')) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/teacher/students/${uid}`, {method:'DELETE', headers: headers()});
+                if (checkAuthAndRedirect(res)) return;
+                if (!res.ok) {
+                    let msg = `删除失败（HTTP ${res.status}）`;
+                    try { const e = await res.json(); if (e && e.detail) msg += `：${e.detail}`; } catch(_) {}
+                    alert(msg);
+                    return;
+                }
+                alert('删除成功');
+                loadStudentList(); loadRanking();
+            } catch(e) {
+                alert(`删除网络失败：${e.message || e}`);
+            }
         }
 
         /* ===================== Tab3: 游戏参数 ===================== */
