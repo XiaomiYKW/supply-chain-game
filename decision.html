@@ -30,7 +30,10 @@
         <div class="row g-4">
             <div class="col-lg-4">
                 <div class="card border-0 shadow-sm mb-4">
-                    <div class="card-header bg-info text-white">当前状态</div>
+                    <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                        <span>当前状态</span>
+                        <span class="small opacity-75">教师端动态配置</span>
+                    </div>
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-12">
@@ -43,68 +46,130 @@
                                 <div class="p-3 rounded-3 border bg-white h-100">
                                     <div class="text-secondary small">原材料</div>
                                     <div class="h5 mb-0 kpi" id="rawStock">0</div>
+                                    <div class="small text-secondary" id="rawCapacity">容量 -</div>
                                 </div>
                             </div>
                             <div class="col-6">
                                 <div class="p-3 rounded-3 border bg-white h-100">
                                     <div class="text-secondary small">成品</div>
                                     <div class="h5 mb-0 kpi" id="fgStock">0</div>
+                                    <div class="small text-secondary" id="fgCapacity">容量 -</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">供应商1采购价</div>
+                                    <div class="h5 mb-0 kpi text-primary fw-semibold" id="supplier1Price">¥0/个</div>
+                                    <div class="small text-secondary" id="supplier1LeadTime">交期 - 月</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">供应商2采购价</div>
+                                    <div class="h5 mb-0 kpi text-danger fw-semibold" id="supplier2Price">¥0/个</div>
+                                    <div class="small text-secondary" id="supplier2LeadTime">交期 - 月</div>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="p-3 rounded-3 border bg-white">
+                                    <div class="text-secondary small">销售单价 / 工厂产能</div>
+                                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                        <div class="h5 mb-0 kpi text-success fw-semibold" id="sellingPrice">¥0/个</div>
+                                        <div class="h6 mb-0 kpi text-secondary fw-semibold" id="factoryCapacity">产能 0 个/月</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="alert alert-light border mt-3 mb-0 small">
-                            <div class="fw-semibold mb-1">规则提示</div>
-                            <div>供应商1：便宜，1 个月后到货</div>
-                            <div>供应商2：贵，当月到货可用于生产</div>
-                            <div>现金不足会自动下调采购量</div>
-                            <div>库存超上限将产生超额成本</div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                        <span>成本规则与难度系数</span>
+                        <span class="small opacity-75">教师端可调</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-2 small">
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">原料持有成本</div>
+                                    <div class="kpi fw-semibold" id="rawHoldingCost">¥0/个/月</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">成品持有成本</div>
+                                    <div class="kpi fw-semibold" id="fgHoldingCost">¥0/个/月</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">原料超额成本</div>
+                                    <div class="kpi fw-semibold" id="rawOverflowCost">¥0/超出/月</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">成品超额成本</div>
+                                    <div class="kpi fw-semibold" id="fgOverflowCost">¥0/超出/月</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">固定成本（每月）</div>
+                                    <div class="kpi fw-semibold" id="fixedCostPerMonth">¥0/月</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">缺货惩罚</div>
+                                    <div class="kpi fw-semibold" id="stockoutPenalty">¥0/缺货</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="p-2 rounded-2 border bg-white h-100">
+                                    <div class="text-secondary" style="font-size:0.75rem;">负现金利息</div>
+                                    <div class="kpi fw-semibold" id="negativeCashInterest">0%/月</div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
 
-                <div class="card border-0 shadow-sm">
-                    <div class="card-header bg-light">快捷填写</div>
-                    <div class="card-body">
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-outline-primary" type="button" id="quickSafeBtn">稳健策略</button>
-                            <button class="btn btn-outline-secondary" type="button" id="quickConservativeBtn">保守策略</button>
-                            <button class="btn btn-outline-success" type="button" id="quickAggressiveBtn">进取策略</button>
-                        </div>
-                        <div class="text-secondary small mt-2">将依据当前库存自动填入一组可运行的参考值。</div>
-                    </div>
-                </div>
+
             </div>
 
             <div class="col-lg-8">
                 <div class="card border-0 shadow">
                     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <span>本月决策</span>
+                        <h5 class="mb-0">本月决策</h5>
                         <span class="small opacity-75" id="decisionHint">提交后自动结算并生成下月</span>
                     </div>
                     <div class="card-body p-4">
+                        <div class="alert d-none mb-3 bg-warning-subtle border border-warning-subtle" id="finishedBanner" role="alert">
+                            <b class="text-warning-emphasis">🏁 游戏已结束（共 <span id="finishedTotalMonths">12</span> 个月）。</b>
+                            请前往报告页查看最终成绩与班级排名对比。
+                        </div>
                         <div class="alert alert-danger d-none" id="decisionError"></div>
                         <form id="decisionForm">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label class="form-label">需求预测</label>
-                                    <input type="number" class="form-control" id="forecastDemand" required min="0" step="1" placeholder="例如：400">
-                                    <div class="form-text">系统将基于预测产生 0.8~1.2 倍波动的实际需求。</div>
+                                    <label class="form-label">需求预测 <small class="text-secondary" id="demandPredSub"></small></label>
+                                    <input type="number" class="form-control" id="forecastDemand" required min="0" step="1">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label">生产数量</label>
-                                    <input type="number" class="form-control" id="productionQuantity" required min="0" step="1" placeholder="例如：300">
-                                    <div class="form-text">受原材料、当月到货与产能约束，实际产量可能低于计划。</div>
+                                    <input type="number" class="form-control" id="productionQuantity" required min="0" step="1">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">供应商1采购（下月到货）</label>
-                                    <input type="number" class="form-control" id="purchase1" min="0" step="1" placeholder="例如：500">
-                                    <div class="form-text">适合做计划性补货。</div>
+                                    <label class="form-label" id="purchase1Label">供应商1采购</label>
+                                    <input type="number" class="form-control" id="purchase1" min="0" step="1">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label">供应商2采购（当月到货）</label>
-                                    <input type="number" class="form-control" id="purchase2" min="0" step="1" placeholder="例如：0">
-                                    <div class="form-text">适合应急补货，现金不足会自动下调。</div>
+                                    <label class="form-label" id="purchase2Label">供应商2采购</label>
+                                    <input type="number" class="form-control" id="purchase2" min="0" step="1">
                                 </div>
                             </div>
 

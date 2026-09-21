@@ -8,6 +8,22 @@ let currentUsername = localStorage.getItem('username') || '';
 let currentRole = localStorage.getItem('role') || 'student';
 let currentAuthToken = localStorage.getItem('authToken') || null;
 let latestState = null;
+let currentGameConfig = null;
+
+function authHeaders() {
+    if (currentAuthToken) return { 'X-Auth-Token': currentAuthToken };
+    return {};
+}
+
+function checkAuthAndRedirect(resp) {
+    if (resp && resp.status === 401) {
+        localStorage.removeItem('authToken');
+        currentAuthToken = null;
+        window.location.href = 'index.html';
+        return true;
+    }
+    return false;
+}
 
 function logout() {
     localStorage.removeItem('userId');
@@ -41,12 +57,15 @@ if (loginForm) {
                 body: JSON.stringify({ username, password })
             });
 
-            if (response.status === 401) {
-                response = await fetch(`${API_BASE_URL}/users/`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password, role: 'student' })
-                });
+            if (!response.ok) {
+                const errorEl2 = document.getElementById('loginError');
+                if (errorEl2) {
+                    errorEl2.innerText = '登录失败：用户名或密码错误。请向教师索取账号。';
+                    errorEl2.classList.remove('d-none');
+                } else {
+                    alert('登录失败：用户名或密码错误。请向教师索取账号。');
+                }
+                return;
             }
 
             const data = await response.json();
@@ -94,7 +113,7 @@ if (loginForm) {
             const btnText = document.getElementById('loginBtnText');
             if (btn) btn.disabled = false;
             if (spinner) spinner.classList.add('d-none');
-            if (btnText) btnText.innerText = '登录 / 注册';
+            if (btnText) btnText.innerText = '登录';
         }
     });
 }
@@ -130,9 +149,10 @@ if (decisionForm) {
 
             const submitRes = await fetch(`${API_BASE_URL}/submit_decision`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', ...authHeaders() },
                 body: JSON.stringify(decisionData)
             });
+            if (checkAuthAndRedirect(submitRes)) return;
 
             const submitJson = await submitRes.json().catch(() => null);
             if (!submitRes.ok) {
@@ -156,8 +176,10 @@ if (decisionForm) {
             }
 
             const settleRes = await fetch(`${API_BASE_URL}/settle_month/${currentUserId}`, {
-                method: 'POST'
+                method: 'POST',
+                headers: authHeaders()
             });
+            if (checkAuthAndRedirect(settleRes)) return;
 
             if (settleRes.ok) {
                 window.location.href = 'report.html';
@@ -192,22 +214,131 @@ if (decisionForm) {
     });
 }
 
+async function loadGameConfig(month) {
+    try {
+        const url = month ? `${API_BASE_URL}/game-config?month=${month}` : `${API_BASE_URL}/game-config`;
+        const r = await fetch(url, { method: 'GET', headers: authHeaders() });
+        if (checkAuthAndRedirect(r)) return;
+        if (!r.ok) return;
+        currentGameConfig = await r.json();
+        return currentGameConfig;
+    } catch (err) {
+        console.error('加载游戏参数失败:', err);
+        return null;
+    }
+}
+
+function renderGameConfigOnDecision(cfg, state) {
+    if (!cfg) return;
+    const el = (id) => document.getElementById(id);
+
+    const setText = (id, val) => { const e = el(id); if (e) e.innerText = val; };
+
+    setText('supplier1Price', `¥${Number(cfg.supplier1_price || 0).toLocaleString()}/个`);
+    const lt1 = Number(cfg.supplier1_lead_time ?? 1);
+    setText('supplier1LeadTime', `交期 ${lt1} 月`);
+    const s1Hint = el('supplier1Hint'); if (s1Hint) s1Hint.innerText = lt1 === 0 ? '当月到货可用于生产' : `${lt1} 个月后到货`;
+    const p1Label = el('purchase1Label'); if (p1Label) p1Label.innerText = lt1 === 0 ? `供应商1采购（当月到货）` : `供应商1采购（${lt1}月后到货）`;
+    const p1Help = el('purchase1Help'); if (p1Help) p1Help.innerText = lt1 === 0 ? '适合当月到货，可用于本月生产。' : '适合做计划性补货。';
+
+    setText('supplier2Price', `¥${Number(cfg.supplier2_price || 0).toLocaleString()}/个`);
+    const lt2 = Number(cfg.supplier2_lead_time ?? 0);
+    setText('supplier2LeadTime', lt2 === 0 ? '当月到货' : `交期 ${lt2} 月`);
+    const s2Hint = el('supplier2Hint'); if (s2Hint) s2Hint.innerText = lt2 === 0 ? '当月到货可用于生产' : `${lt2} 个月后到货`;
+    const p2Label = el('purchase2Label'); if (p2Label) p2Label.innerText = lt2 === 0 ? '供应商2采购（当月到货）' : `供应商2采购（${lt2}月后到货）`;
+
+    setText('sellingPrice', `¥${Number(cfg.selling_price || 0).toLocaleString()}/个`);
+    setText('factoryCapacity', `产能 ${Number(cfg.factory_capacity || 0).toLocaleString()} 个/月`);
+
+    setText('rawHoldingCost', `¥${Number(cfg.raw_holding_cost || 0).toLocaleString()}/个/月`);
+    setText('fgHoldingCost', `¥${Number(cfg.fg_holding_cost || 0).toLocaleString()}/个/月`);
+    setText('rawOverflowCost', `¥${Number(cfg.raw_overflow_cost || 0).toLocaleString()}/个/月`);
+    setText('fgOverflowCost', `¥${Number(cfg.fg_overflow_cost || 0).toLocaleString()}/个/月`);
+    setText('fixedCostPerMonth', `¥${Number(cfg.fixed_cost_per_month || 0).toLocaleString()}/月`);
+    setText('stockoutPenalty', `¥${Number(cfg.stockout_penalty_per_unit || 0).toLocaleString()}/缺货`);
+    const rate = Number(cfg.negative_cash_interest_rate || 0) * 100;
+    setText('negativeCashInterest', `${rate.toFixed(2)}%/月`);
+    const low = Number(cfg.demand_variation_low || 0);
+    const high = Number(cfg.demand_variation_high || 0);
+    setText('demandRange', `${low.toFixed(2)}x ~ ${high.toFixed(2)}x`);
+
+    // ============ 本轮新增：需求模式 Banner + 本月基准提示 / 封盘 Banner ============
+    const mode = (cfg.demand_mode || 'curve_preset').toLowerCase();
+    const totalMonths = Number(cfg.game_total_months || 12);
+    const curMonth = state ? Number(state.month || 1) : 1;
+    const banner = el('demandModeBanner');
+    const forecastHint = el('forecastDemandHint');
+    const predSub = el('demandPredSub');
+    if (banner) {
+        banner.classList.remove('d-none', 'alert-info', 'alert-success', 'alert-primary', 'alert-warning');
+        // 默认 banner：curve_preset 或 excel_import —— 教师预设模式，不泄露具体数值
+        banner.classList.add('alert-primary');
+        const suffix = mode === 'excel_import' ? '（Excel导入）' : '（曲线预设）';
+        banner.innerHTML = `<b>🎯 当前模式：教师预设需求${suffix} · 全班同卷对比</b>。教师已在课堂公布本月需求曲线 / 基准表，请根据老师课上给的参数、结合你自己的判断，填写下方「需求预测」（仅你的策略记录，不影响系统实际需求）。实际需求由「教师预设基准 × 固定波动」生成，<u>全班同月完全一致</u>，报告页可对比「你预测 vs 全班实际」。`;
+        if (forecastHint) forecastHint.innerText = '仅记录你自己的主观预测；系统实际需求由教师课前发布的曲线/表格决定，全班同月一致。';
+        if (predSub) predSub.innerText = '(你的策略记录 · 实际需求由教师公布)';
+    }
+    // 顶部「第X月 / 共Y月」提示
+    const userInfo = el('userInfo');
+    if (userInfo && state) {
+        userInfo.innerText = `学生: ${currentUsername} | 第 ${state.month} 月 / 共 ${totalMonths} 月`;
+    }
+    // 封盘 Banner + 禁用表单
+    const finishedBanner = el('finishedBanner');
+    const decisionSubmitBtn = el('submitDecisionBtn');
+    const decisionForm = document.getElementById('decisionForm');
+    const gameFinished = curMonth >= totalMonths && state && state.is_settled;
+    if (finishedBanner) {
+        if (gameFinished) {
+            finishedBanner.classList.remove('d-none');
+            el('finishedTotalMonths').innerText = totalMonths;
+            if (decisionForm) [...decisionForm.querySelectorAll('input,button')].forEach(n => n.setAttribute('disabled','disabled'));
+            if (decisionSubmitBtn) { decisionSubmitBtn.classList.remove('btn-success'); decisionSubmitBtn.classList.add('btn-secondary'); decisionSubmitBtn.querySelector('#submitDecisionText').innerText = '游戏已结束'; }
+        } else {
+            finishedBanner.classList.add('d-none');
+        }
+    }
+    // 决策页 Hint：显示是否为最后一月
+    const hintEl = el('decisionHint');
+    if (hintEl && state) {
+        if (curMonth >= totalMonths) hintEl.innerText = `最后一月（共${totalMonths}月），结算后游戏封盘`;
+        else hintEl.innerText = `第 ${curMonth}/${totalMonths} 月 · 提交后自动结算并生成下月`;
+    }
+
+    if (state) {
+        const rawStock = Number(state.raw_material_stock || 0);
+        const rawCap = Number(cfg.raw_warehouse_capacity || 0);
+        const rawCapEl = el('rawCapacity');
+        if (rawCapEl) rawCapEl.innerText = rawCap > 0 ? `当前 ${rawStock.toLocaleString()} / 容量 ${rawCap.toLocaleString()}` : `当前 ${rawStock.toLocaleString()}`;
+        const fgStock = Number(state.finished_goods_stock || 0);
+        const fgCap = Number(cfg.fg_warehouse_capacity || 0);
+        const fgCapEl = el('fgCapacity');
+        if (fgCapEl) fgCapEl.innerText = fgCap > 0 ? `当前 ${fgStock.toLocaleString()} / 容量 ${fgCap.toLocaleString()}` : `当前 ${fgStock.toLocaleString()}`;
+    }
+}
+
 async function loadGameState() {
     if (!currentUserId) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/game_state/${currentUserId}`);
-        if (response.status === 404) {
+        const firstResp = await fetch(`${API_BASE_URL}/game_state/${currentUserId}`, { method: 'GET', headers: authHeaders() });
+        if (checkAuthAndRedirect(firstResp)) return;
+        if (firstResp.status === 404) {
             alert('当前游戏已结束所有月份，请联系教师重置');
             return;
         }
 
-        const state = await response.json();
+        const state = await firstResp.json();
         latestState = state;
 
+        // 并发拉 config，带 month 获取本月基准
+        const cfg = await loadGameConfig(state.month);
+        renderGameConfigOnDecision(cfg, state);
+
         const userInfo = document.getElementById('userInfo');
-        if (userInfo) {
-            userInfo.innerText = `学生: ${currentUsername} | 第 ${state.month} 月`;
+        if (userInfo && !document.getElementById('currentCash')) {
+            const totalMonths = Number(cfg?.game_total_months || 12);
+            userInfo.innerText = `学生: ${currentUsername} | 第 ${state.month} 月 / 共 ${totalMonths} 月`;
         }
 
         if (document.getElementById('currentCash')) {
@@ -215,6 +346,7 @@ async function loadGameState() {
             document.getElementById('rawStock').innerText = state.raw_material_stock;
             document.getElementById('fgStock').innerText = state.finished_goods_stock;
         }
+
     } catch (error) {
         console.error('加载状态失败:', error);
     }
@@ -224,14 +356,32 @@ async function loadReport() {
     if (!currentUserId) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/report/${currentUserId}`);
+        const response = await fetch(`${API_BASE_URL}/report/${currentUserId}`, { method: 'GET', headers: authHeaders() });
+        if (checkAuthAndRedirect(response)) return;
         if (!response.ok) throw new Error('No report found');
         const state = await response.json();
 
         if (document.getElementById('actualDemand')) {
             document.getElementById('reportMonth').innerText = state.month;
-            document.getElementById('actualDemand').innerText = state.actual_demand || '-';
-            document.getElementById('actualSales').innerText = state.actual_sales || '-';
+            document.getElementById('actualDemand').innerText = Math.round(state.actual_demand || 0).toLocaleString();
+            const fEl = document.getElementById('forecastDemand');
+            if (fEl) fEl.innerText = Math.round(state.forecast_demand || 0).toLocaleString();
+            const devEl = document.getElementById('forecastDeviation');
+            const devNote = document.getElementById('forecastDeviationNote');
+            const card = document.getElementById('forecastCompareCard');
+            const fc = Math.round(state.forecast_demand || 0);
+            const ad = Math.round(state.actual_demand || 0);
+            if (devEl && ad > 0) {
+                const pct = ((fc - ad) / ad) * 100;  // 正=预测过高，负=预测不足
+                devEl.innerText = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+                if (Math.abs(pct) <= 10) { devEl.className = 'h4 mb-0 kpi text-success'; if (card) { card.classList.add('border-success'); card.classList.remove('border-danger','border-warning'); }
+                    if (devNote) devNote.innerText = '✅ 预测优秀，偏差在 ±10% 以内'; }
+                else if (Math.abs(pct) <= 25) { devEl.className = 'h4 mb-0 kpi text-warning'; if (card) { card.classList.add('border-warning'); card.classList.remove('border-danger','border-success'); }
+                    if (devNote) devNote.innerText = '⚠️ 预测中等偏差（' + (pct>0?'生产过多占用资金':'库存不足可能缺货') + '）'; }
+                else { devEl.className = 'h4 mb-0 kpi text-danger'; if (card) { card.classList.add('border-danger'); card.classList.remove('border-success','border-warning'); }
+                    if (devNote) devNote.innerText = '❌ 预测大幅偏离（' + (pct>0?'严重超产，库存积压':'预测太低，严重缺货') + '），下月请结合教师给的基准区间调整'; }
+            } else if (devEl) { devEl.innerText = '-'; if (devNote) devNote.innerText = '无数据'; }
+            const actualSalesEl = document.getElementById('actualSales'); if (actualSalesEl) actualSalesEl.innerText = state.actual_sales || '-';
             document.getElementById('revenue').innerText = `¥${(state.revenue || 0).toLocaleString()}`;
             document.getElementById('totalCost').innerText = `¥${(state.total_cost || 0).toLocaleString()}`;
             const purchaseCostEl = document.getElementById('purchaseCost');
@@ -267,7 +417,8 @@ async function loadHistoryChart() {
     if (!currentUserId) return;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/history/${currentUserId}`);
+        const response = await fetch(`${API_BASE_URL}/history/${currentUserId}`, { method: 'GET', headers: authHeaders() });
+        if (checkAuthAndRedirect(response)) return;
         const data = await response.json();
 
         if (data.length === 0) return;
@@ -356,8 +507,159 @@ async function loadHistoryChart() {
                 `;
             }).join('');
         }
+
+        loadRankingAndCompareChart(data);
+
     } catch (error) {
         console.error('加载历史图表失败:', error);
+    }
+}
+
+async function loadRankingAndCompareChart(myHistoryData) {
+    const compareCtx = document.getElementById('compareChart');
+    const myRankEl = document.getElementById('myRank');
+    if (!compareCtx && !myRankEl) return;
+    if (!currentAuthToken) return;
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/student/my-ranking`, {
+            method: 'GET',
+            headers: { 'X-Auth-Token': currentAuthToken }
+        });
+        if (!res.ok) return;
+        const info = await res.json();
+        const fp = info.first_place || {};
+        const firstHistory = fp.history || [];
+
+        if (myRankEl) {
+            myRankEl.innerText = info.my_rank !== null && info.my_rank !== undefined ? `第 ${info.my_rank} 名` : '暂无数据';
+        }
+        const totalEl = document.getElementById('totalStudents');
+        if (totalEl) totalEl.innerText = info.total_students || 0;
+        const firstProfitEl = document.getElementById('firstTotalProfit');
+        if (firstProfitEl) firstProfitEl.innerText = fp.total_profit !== undefined ? `¥${Number(fp.total_profit).toLocaleString()}` : '-';
+        const firstMonthsEl = document.getElementById('firstMonthsPlayed');
+        if (firstMonthsEl) firstMonthsEl.innerText = fp.months_played !== undefined ? fp.months_played : 0;
+
+        const myCum = Number(info.my_total_profit || 0);
+        const firstCum = Number(fp.total_profit || 0);
+        const gap = firstCum - myCum;
+        const gapEl = document.getElementById('profitGap');
+        const gapDescEl = document.getElementById('profitGapDesc');
+        if (gapEl) {
+            if (info.my_rank === 1) {
+                gapEl.innerText = '🎉 我就是第一名';
+                gapEl.className = 'h3 kpi fw-semibold text-success';
+            } else {
+                gapEl.innerText = `¥${gap.toLocaleString()}`;
+                gapEl.className = 'h3 kpi fw-semibold text-danger';
+            }
+        }
+        if (gapDescEl) {
+            if (info.my_rank === 1) {
+                gapDescEl.innerText = '恭喜！保持优势继续加油';
+            } else if (gap > 0) {
+                gapDescEl.innerText = `落后第一名 ${gap.toLocaleString()} 元，加油追赶！`;
+            } else if (gap < 0) {
+                gapDescEl.innerText = `已超出第一名 ${Math.abs(gap).toLocaleString()} 元`;
+            } else {
+                gapDescEl.innerText = '与第一名持平';
+            }
+        }
+
+        if (!compareCtx || !myHistoryData || myHistoryData.length === 0) return;
+
+        if (window.compareChartInstance) {
+            window.compareChartInstance.destroy();
+        }
+
+        const myMap = new Map();
+        for (const s of myHistoryData) {
+            const c = (s.cumulative_profit !== undefined && s.cumulative_profit !== null)
+                ? Number(s.cumulative_profit)
+                : Number(s.profit || 0);
+            myMap.set(Number(s.month), c);
+        }
+        let runningMine = 0;
+        for (const s of myHistoryData) {
+            if (s.cumulative_profit === undefined || s.cumulative_profit === null) {
+                runningMine += Number(s.profit || 0);
+                myMap.set(Number(s.month), runningMine);
+            }
+        }
+
+        const firstMap = new Map();
+        for (const s of firstHistory) {
+            firstMap.set(Number(s.month), Number(s.cumulative_profit || 0));
+        }
+
+        const allMonths = new Set([...myMap.keys(), ...firstMap.keys()]);
+        const months = Array.from(allMonths).sort((a, b) => a - b);
+        if (months.length === 0) return;
+
+        const labels = months.map(m => `第 ${m} 月`);
+        const myData = months.map(m => myMap.has(m) ? myMap.get(m) : null);
+        const firstData = months.map(m => firstMap.has(m) ? firstMap.get(m) : null);
+
+        window.compareChartInstance = new Chart(compareCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: '我的累计利润',
+                        data: myData,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.1)',
+                        tension: 0.3,
+                        fill: true,
+                        spanGaps: false,
+                        pointRadius: 3
+                    },
+                    {
+                        label: fp.display_name || '当前第一名（匿名）',
+                        data: firstData,
+                        borderColor: 'rgb(234, 179, 8)',
+                        backgroundColor: 'rgba(234, 179, 8, 0.1)',
+                        borderDash: [6, 3],
+                        tension: 0.3,
+                        fill: false,
+                        spanGaps: false,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: '我 vs 当前第一名 累计利润对比'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (ctx) {
+                                const val = ctx.parsed.y;
+                                if (val === null || val === undefined) return ctx.dataset.label + ': 暂无数据';
+                                return ctx.dataset.label + ': ¥' + Number(val).toLocaleString();
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        title: { display: true, text: '累计利润 (¥)' }
+                    }
+                }
+            }
+        });
+
+    } catch (err) {
+        console.error('加载排名与对比图失败:', err);
     }
 }
 

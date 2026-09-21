@@ -7,9 +7,14 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        .kpi {
-            font-variant-numeric: tabular-nums;
-        }
+        .kpi { font-variant-numeric: tabular-nums; }
+        .tab-pane { padding-top: 1rem; }
+        .param-label { display: flex; justify-content: space-between; align-items: center; }
+        .param-label .hint { color: #6c757d; font-size: 0.85rem; }
+        .editable-cell { background-color: #fffbe6; }
+        .mode-radio-card { transition: all 0.2s; cursor: pointer; }
+        .mode-radio-card.active { border-color: #0d6efd; background-color: #e7f1ff; }
+        .preset-btn { padding: 0.18rem 0.45rem; font-size: 0.75rem; }
     </style>
 </head>
 <body class="bg-light">
@@ -24,293 +29,817 @@
     </nav>
 
     <div class="container">
-        <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
-            <div>
-                <h2 class="mb-1">学生利润排行榜</h2>
-                <div class="text-secondary small">支持按学生名快速筛选，点击查看详情可看历史曲线与每月数据。</div>
-            </div>
-            <div class="d-flex gap-2">
-                <input type="text" class="form-control" id="rankingSearch" placeholder="搜索学生名" style="max-width: 220px;">
-                <button class="btn btn-outline-primary" id="refreshRankingBtn" type="button">刷新</button>
-            </div>
-        </div>
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#ranking-tab-pane" type="button">学生排行榜</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#student-tab-pane" type="button">学生账号管理</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#config-tab-pane" type="button">游戏参数设置</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#demand-tab-pane" type="button" id="demand-tab-btn">需求模式设置 <span class="badge bg-secondary" id="demandModeBadge">模式二 · 曲线预设</span></button>
+            </li>
+        </ul>
 
-        <div class="alert alert-danger d-none" id="teacherError"></div>
-
-        <div class="table-responsive mb-5">
-            <table class="table table-striped table-hover">
-                <thead class="table-dark">
-                    <tr>
-                        <th>排名</th>
-                        <th>学生</th>
-                        <th>累计利润</th>
-                        <th>已完成月数</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="rankingTable">
-                    <tr>
-                        <td colspan="5" class="text-center py-4 text-secondary">
-                            <div class="spinner-border" role="status" aria-hidden="true"></div>
-                            <div class="mt-2">加载中...</div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <div class="row" id="studentDetailSection" style="display:none;">
-            <div class="col-md-12">
-                <h3 class="mb-3"><span id="selectedStudentName"></span> - 历史数据</h3>
-                <div class="card mb-4">
-                    <div class="card-body">
-                        <canvas id="profitChart" height="80"></canvas>
+        <div class="tab-content mt-3">
+            <!-- ============== Tab1 排行榜 ============== -->
+            <div class="tab-pane fade show active" id="ranking-tab-pane">
+                <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+                    <div>
+                        <h2 class="mb-1">学生利润排行榜</h2>
+                        <div class="text-secondary small">支持按学生名快速筛选，点击查看详情可看历史曲线与每月数据。</div>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <input type="text" class="form-control" id="rankingSearch" placeholder="搜索学生名" style="max-width: 220px;">
+                        <button class="btn btn-outline-primary" id="refreshRankingBtn" type="button">刷新</button>
                     </div>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead>
+                <div class="alert alert-danger d-none" id="teacherError"></div>
+                <div class="table-responsive mb-5">
+                    <table class="table table-striped table-hover">
+                        <thead class="table-dark">
                             <tr>
-                                <th>月份</th>
-                                <th>预测需求</th>
-                                <th>实际需求</th>
-                                <th>实际销售</th>
-                                <th>收入</th>
-                                <th>成本</th>
-                                <th>利润</th>
-                                <th>期末现金</th>
+                                <th>排名</th><th>学生</th><th>累计利润</th><th>已完成月数</th><th>操作</th>
                             </tr>
                         </thead>
-                        <tbody id="studentHistoryTable"></tbody>
+                        <tbody id="rankingTable">
+                            <tr><td colspan="5" class="text-center py-4 text-secondary">
+                                <div class="spinner-border" role="status" aria-hidden="true"></div>
+                                <div class="mt-2">加载中...</div>
+                            </td></tr>
+                        </tbody>
                     </table>
                 </div>
+                <div class="row" id="studentDetailSection" style="display:none;">
+                    <div class="col-md-12">
+                        <h3 class="mb-3"><span id="selectedStudentName"></span> - 历史数据</h3>
+                        <div class="card mb-4"><div class="card-body"><canvas id="profitChart" height="80"></canvas></div></div>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead><tr>
+                                    <th>月份</th><th>预测需求</th><th>实际需求</th><th>实际销售</th>
+                                    <th>收入</th><th>成本</th><th>利润</th><th>期末现金</th>
+                                </tr></thead>
+                                <tbody id="studentHistoryTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============== Tab2 账号管理 ============== -->
+            <div class="tab-pane fade" id="student-tab-pane">
+                <h2 class="mb-3">学生账号管理</h2>
+                <div class="row mb-4">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <h5 class="card-header">单个创建</h5>
+                            <div class="card-body">
+                                <div class="mb-2"><label class="form-label">用户名</label><input type="text" class="form-control" id="studentCreateUsername"></div>
+                                <div class="mb-3"><label class="form-label">初始密码</label><input type="text" class="form-control" id="studentCreatePassword" value="123456"></div>
+                                <button class="btn btn-primary" id="studentCreateBtn" type="button">创建账号</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <h5 class="card-header">Excel 批量导入</h5>
+                            <div class="card-body">
+                                <div class="mb-2"><a id="downloadStuTpl" href="javascript:void(0)" class="btn btn-outline-secondary btn-sm">下载 Excel 模板</a></div>
+                                <div><input type="file" id="studentExcelFile" accept=".xlsx" class="form-control"></div>
+                                <div class="mt-3"><button class="btn btn-success" id="studentImportBtn" type="button">开始导入</button>
+                                    <span class="ms-2 text-secondary small" id="studentImportTip"></span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <h5 class="card-header">全班操作</h5>
+                            <div class="card-body">
+                                <div class="alert alert-warning p-2 mb-3 small">⚠️ 按钮 1 会清空所有学生已玩的月份、报告、成绩，并自动把全班重置为第 1 月（保留学生账号 + 教师配置 + 需求计划）。</div>
+                                <button class="btn btn-outline-danger w-100 mb-2" id="resetClassBtn" type="button">🔄 一键重置全班 · 初始化下一轮（月 1）</button>
+                                <button class="btn btn-outline-success w-100" id="exportRankingBtn" type="button">📤 导出全班匿名排名 Excel（含各月利润/预测对比）</button>
+                                <div class="mt-2 small text-muted" id="classOperationTip">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h5 class="card-header d-flex justify-content-between">
+                        学生账号列表
+                        <button class="btn btn-outline-primary btn-sm" id="refreshStuListBtn" type="button">刷新</button>
+                    </h5>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead><tr><th>ID</th><th>用户名</th><th>创建方式</th><th>操作</th></tr></thead>
+                                <tbody id="studentListTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ============== Tab3 游戏参数 ============== -->
+            <div class="tab-pane fade" id="config-tab-pane">
+                <h2 class="mb-3">游戏参数设置</h2>
+                <div class="alert alert-info small">说明：修改后即时生效，学生刷新决策页即可看到新值；已结算月份的历史数据不会被回溯。</div>
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <h5 class="card-header">① 价格、供应商与产能</h5>
+                            <div class="card-body">
+                                <div class="mb-3"><label class="form-label param-label">成品销售单价（元/个） <span class="hint">卖出一个成品获得的收入</span></label>
+                                    <input type="number" step="0.01" class="form-control" data-cfg="selling_price"></div>
+                                <div class="row g-2">
+                                    <div class="col-6 mb-3"><label class="form-label param-label">供应商1 单价 <span class="hint">便宜，但有交期</span></label>
+                                        <input type="number" step="0.01" class="form-control" data-cfg="supplier1_price"></div>
+                                    <div class="col-6 mb-3"><label class="form-label param-label">供应商1 交期（月） <span class="hint">0=当月到货</span></label>
+                                        <input type="number" step="1" min="0" max="3" class="form-control" data-cfg="supplier1_lead_time"></div>
+                                    <div class="col-6 mb-3"><label class="form-label param-label">供应商2 单价 <span class="hint">贵，现买现到</span></label>
+                                        <input type="number" step="0.01" class="form-control" data-cfg="supplier2_price"></div>
+                                    <div class="col-6 mb-3"><label class="form-label param-label">供应商2 交期（月）</label>
+                                        <input type="number" step="1" min="0" max="3" class="form-control" data-cfg="supplier2_lead_time"></div>
+                                </div>
+                                <div class="mb-1"><label class="form-label param-label">工厂月产能（个） <span class="hint">每月最多可生产多少成品</span></label>
+                                    <input type="number" step="1" min="0" class="form-control" data-cfg="factory_capacity"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card mb-3">
+                            <h5 class="card-header">② 库存容量与持有/超额成本</h5>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-6 mb-2"><label class="form-label param-label">原料容量 <span class="hint">超限按个加罚</span></label>
+                                        <input type="number" step="1" min="0" class="form-control" data-cfg="raw_warehouse_capacity"></div>
+                                    <div class="col-6 mb-2"><label class="form-label param-label">成品容量</label>
+                                        <input type="number" step="1" min="0" class="form-control" data-cfg="fg_warehouse_capacity"></div>
+                                    <div class="col-6 mb-2"><label class="form-label param-label">原料持有（元/个/月）</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" data-cfg="raw_holding_cost"></div>
+                                    <div class="col-6 mb-2"><label class="form-label param-label">成品持有（元/个/月）</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" data-cfg="fg_holding_cost"></div>
+                                    <div class="col-6 mb-2"><label class="form-label param-label">原料超额成本</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" data-cfg="raw_overflow_cost"></div>
+                                    <div class="col-6 mb-2"><label class="form-label param-label">成品超额成本</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" data-cfg="fg_overflow_cost"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h5 class="card-header">④ 新学生初始值（仅影响新建学生）</h5>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-4 mb-2"><label class="form-label param-label">初始现金（元）</label>
+                                        <input type="number" step="100" class="form-control" data-cfg="initial_cash"></div>
+                                    <div class="col-4 mb-2"><label class="form-label param-label">初始原料库存</label>
+                                        <input type="number" step="1" min="0" class="form-control" data-cfg="initial_raw_stock"></div>
+                                    <div class="col-4 mb-2"><label class="form-label param-label">初始成品库存</label>
+                                        <input type="number" step="1" min="0" class="form-control" data-cfg="initial_fg_stock"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-12">
+                        <div class="card">
+                            <h5 class="card-header">③ 难度系数 & 游戏总周期</h5>
+                            <div class="card-body">
+                                <div class="row g-2">
+                                    <div class="col-6 col-md-4 mb-2"><label class="form-label param-label">需求波动下限（倍数）</label>
+                                        <input type="number" step="0.01" min="0.2" class="form-control" data-cfg="demand_variation_low"></div>
+                                    <div class="col-6 col-md-4 mb-2"><label class="form-label param-label">需求波动上限（倍数）</label>
+                                        <input type="number" step="0.01" min="0.2" class="form-control" data-cfg="demand_variation_high"></div>
+                                    <div class="col-6 col-md-4 mb-2"><label class="form-label param-label">固定成本（元/月）</label>
+                                        <input type="number" step="100" min="0" class="form-control" data-cfg="fixed_cost_per_month"></div>
+                                    <div class="col-6 col-md-4 mb-2"><label class="form-label param-label">缺货惩罚（元/缺货个）</label>
+                                        <input type="number" step="0.01" min="0" class="form-control" data-cfg="stockout_penalty_per_unit"></div>
+                                    <div class="col-6 col-md-4 mb-2"><label class="form-label param-label">负现金利率（月利率小数，如0.02=2%）</label>
+                                        <input type="number" step="0.005" class="form-control" data-cfg="negative_cash_interest_rate"></div>
+                                    <div class="col-6 col-md-2 mb-2"><label class="form-label param-label">总游戏月数 <span class="hint">6~24，默认12</span></label>
+                                        <input type="number" step="1" min="6" max="24" class="form-control" data-cfg="game_total_months"></div>
+                                    <div class="col-12 col-md-2 mb-2">
+                                        <label class="form-label param-label">全局随机种子 <span class="hint">同月全班需求一致；换数字可换卷</span></label>
+                                        <div class="input-group">
+                                            <input type="number" step="1" class="form-control" data-cfg="demand_seed">
+                                            <button class="btn btn-outline-secondary" type="button" id="demandSeedRandomBtn">随机</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 justify-content-end mb-5">
+                    <button class="btn btn-outline-secondary" id="resetConfigFormBtn" type="button">恢复表单为当前值</button>
+                    <button class="btn btn-primary" id="saveConfigBtn" type="button">
+                        <span class="spinner-border spinner-border-sm d-none" id="saveCfgSpin"></span>
+                        <span id="saveCfgText">保存设置</span>
+                    </button>
+                </div>
+                <div class="alert alert-success d-none" id="cfgSuccessTip"></div>
+                <div class="alert alert-danger d-none" id="cfgErrorTip"></div>
+            </div>
+
+            <!-- ============== Tab4 需求模式设置（本轮重点） ============== -->
+            <div class="tab-pane fade" id="demand-tab-pane">
+                <h2 class="mb-3">需求模式设置</h2>
+                <div class="alert alert-info small">
+                    两种教师预设模式（<b>Excel 导入每月基准</b> / <b>曲线一键生成</b>）二选一；切换后即时生效。核心公平性保证：<b>同月全班 actual_demand 一字不差</b>（全班同卷对比），实际需求 = 本月基准 × 固定波动因子（同班同月完全一致）。
+                </div>
+
+                <!-- ① 模式切换 Radio Card -->
+                <div class="row g-2 mb-4">
+                    <div class="col-md-6">
+                        <label class="card mode-radio-card" id="modeCard-excel_import">
+                            <div class="card-body py-3">
+                                <div class="form-check"><input class="form-check-input" type="radio" name="demandMode" value="excel_import"></div>
+                                <h6 class="mt-1 mb-1">模式一 · Excel导入每月基准</h6>
+                                <div class="text-secondary small">教师自定义每月基准需求量，系统再乘波动生成实际需求。适合"定制考试卷 / 模拟真题卷"。</div>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="card mode-radio-card active" id="modeCard-curve_preset">
+                            <div class="card-body py-3">
+                                <div class="form-check"><input class="form-check-input" type="radio" name="demandMode" value="curve_preset" checked></div>
+                                <h6 class="mt-1 mb-1">模式二 · 曲线预设（推荐教学，默认）</h6>
+                                <div class="text-secondary small">6 种常见需求曲线（季节波/牛鞭效应/促销脉冲/线性增长/经济周期…）+ 3 档快捷参数 + 包络线预览，一键写入全班需求基准。</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- ① 模式一：Excel 导入每月基准需求 -->
+                <div class="card mb-4" id="excelSection" style="display:none;">
+                    <h5 class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
+                        <span>模式一 · Excel 导入每月基准需求</span>
+                        <div>
+                            <a class="btn btn-outline-secondary btn-sm" id="downloadDemandTplBtn" href="javascript:void(0)">下载 Excel 模板</a>
+                            <input type="file" id="demandExcelFile" accept=".xlsx" class="d-none">
+                            <button class="btn btn-primary btn-sm" id="pickDemandExcelBtn" type="button">选择 Excel 导入</button>
+                        </div>
+                    </h5>
+                    <div class="card-body">
+                        <div class="mb-2 text-secondary small">导入后下方表格可直接编辑；编辑完记得点最下方"保存表格修改"按钮持久化。</div>
+                        <div class="table-responsive" style="max-height: 320px; overflow-y:auto;">
+                            <table class="table table-sm table-striped" id="demandEditableTable">
+                                <thead class="table-dark sticky-top">
+                                    <tr><th style="width:30%;">月份</th><th>基准需求量</th><th style="width:25%;">来源</th></tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="mt-2 d-flex gap-2">
+                            <button class="btn btn-primary" id="saveDemandTableBtn" type="button">保存表格修改</button>
+                            <button class="btn btn-outline-danger" id="resetDemandTableBtn" type="button">清空并重置为 400 默认</button>
+                            <span class="text-secondary small align-self-center" id="demandTableTip"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ② 模式二：曲线选择 + 预览 -->
+                <div class="card mb-4" id="curveSection" style="display:none;">
+                    <h5 class="card-header">模式二 · 曲线预设生成基准需求</h5>
+                    <div class="card-body">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold">曲线类型</label>
+                                <select class="form-select" id="curveType">
+                                    <option value="flat">flat · 平稳恒定（新手友好）</option>
+                                    <option value="sine" selected>sine · 正弦季节波（冷饮/服装）</option>
+                                    <option value="linear_growth">linear_growth · 线性增长（新品爬坡）</option>
+                                    <option value="boom_bust">boom_bust · 经济周期（繁荣/崩盘）</option>
+                                    <option value="bullwhip">bullwhip · 牛鞭效应（噪声逐月放大）</option>
+                                    <option value="promo_pulse">promo_pulse · 促销脉冲（大促节奏）</option>
+                                </select>
+                                <div class="mt-2">
+                                    <span class="small text-secondary me-2">3 档快捷：</span>
+                                    <button type="button" class="btn btn-outline-secondary preset-btn" data-preset="weak">弱</button>
+                                    <button type="button" class="btn btn-outline-primary preset-btn" data-preset="mid">中（推荐）</button>
+                                    <button type="button" class="btn btn-outline-danger preset-btn" data-preset="strong">强</button>
+                                </div>
+                            </div>
+                            <div class="col-md-8" id="curveParamsForm"></div>
+                        </div>
+                        <div class="d-flex gap-2 mb-3">
+                            <button class="btn btn-outline-primary" id="curvePreviewBtn" type="button">仅预览（不写库）</button>
+                            <button class="btn btn-primary" id="curveApplyBtn" type="button">应用并保存到需求计划</button>
+                        </div>
+                        <div class="card bg-light"><div class="card-body p-2" style="height:320px;"><canvas id="demandCurveChart"></canvas></div></div>
+                        <div class="small text-secondary mt-2">图例：<span class="text-primary">■</span> 每月基准需求量（中枢）；<span class="text-gray" style="opacity:0.5;">■</span> 波动包络线（下限 / 上限）；实际需求 = 基准 × seeded 波动（同月全班一致）</div>
+                    </div>
+                </div>
+
+                <div class="alert alert-success d-none" id="demandSuccessTip"></div>
+                <div class="alert alert-danger d-none" id="demandErrorTip"></div>
             </div>
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
             ? 'http://localhost:8005'
             : 'https://supply-chain-game.onrender.com';
         const authToken = localStorage.getItem('authToken');
-        let profitChart = null;
+        const MODE_LABEL = {
+            excel_import: '模式一 · Excel导入',
+            curve_preset: '模式二 · 曲线预设'
+        };
+        const DEFAULT_CURVE_PARAMS = {
+            flat:           { weak: {base: 400},                  mid: {base: 400},                 strong: {base: 400} },
+            sine:           { weak: {base: 400, amplitude: 80,  period:12, phase_shift:0},
+                              mid:  {base: 400, amplitude: 150, period:12, phase_shift:0},
+                              strong:{base: 400, amplitude: 260, period:12, phase_shift:0} },
+            linear_growth:  { weak: {base: 400, growth_per_month: 8 },
+                              mid:  {base: 400, growth_per_month: 15},
+                              strong:{base: 400, growth_per_month: 30} },
+            boom_bust:      { weak: {base: 400, boom_gain: 120, bust_loss: -150},
+                              mid:  {base: 400, boom_gain: 200, bust_loss: -250},
+                              strong:{base: 400, boom_gain: 350, bust_loss: -450} },
+            bullwhip:       { weak: {base: 400, noise_scale: 40,  seed: 9999},
+                              mid:  {base: 400, noise_scale: 80,  seed: 9999},
+                              strong:{base: 400, noise_scale: 150, seed: 9999} },
+            promo_pulse:    { weak: {base: 400, pulse_every: 3, peak_mult: 1.5, normal_mult: 0.95},
+                              mid:  {base: 400, pulse_every: 3, peak_mult: 2.0, normal_mult: 0.90},
+                              strong:{base: 400, pulse_every: 2, peak_mult: 2.8, normal_mult: 0.85} }
+        };
+        const CURVE_FIELDS = {
+            flat: [
+                {key:'base', label:'基准中枢值', step:1, min:0}
+            ],
+            sine: [
+                {key:'base', label:'基准中枢值', step:1, min:0},
+                {key:'amplitude', label:'季节振幅（峰谷差÷2）', step:1, min:0},
+                {key:'period', label:'周期（月）', step:1, min:3},
+                {key:'phase_shift', label:'相位偏移（月）', step:1}
+            ],
+            linear_growth: [
+                {key:'base', label:'第1月基准', step:1, min:0},
+                {key:'growth_per_month', label:'每月净增长量（个）', step:1}
+            ],
+            boom_bust: [
+                {key:'base', label:'起始基准', step:1, min:0},
+                {key:'boom_gain', label:'繁荣期顶峰高出量', step:1},
+                {key:'bust_loss', label:'衰退期期末减少量（负数）', step:1}
+            ],
+            bullwhip: [
+                {key:'base', label:'基准中枢', step:1, min:0},
+                {key:'noise_scale', label:'噪声强度（越大波动越夸张）', step:1, min:0},
+                {key:'seed', label:'内部随机种子（换数字换曲线形状）', step:1}
+            ],
+            promo_pulse: [
+                {key:'base', label:'常态基准', step:1, min:0},
+                {key:'pulse_every', label:'每N月一次大促', step:1, min:1},
+                {key:'peak_mult', label:'大促月倍率（如2.0 = 翻2倍）', step:0.1, min:1},
+                {key:'normal_mult', label:'平常月倍率（如0.9=打九折，模拟囤货透支）', step:0.01, min:0}
+            ]
+        };
+
         let rankingCache = [];
+        let demandSummaryCache = null;   // GET /teacher/demand-summary
+        let demandCurveChart = null;
+        let profitChart = null;
+        let editableDemandRows = [];     // 模式一表格内存（可编辑每月基准） [{month, base_demand, source}]
 
+        /* ===================== 通用工具 ===================== */
+        function headers() { return { 'X-Auth-Token': authToken, 'Content-Type': 'application/json' }; }
+        function showTip(elId, ok, msg) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.textContent = msg;
+            el.classList.remove('d-none');
+            setTimeout(() => el.classList.add('d-none'), 4000);
+        }
         async function ensureTeacherOrRedirect() {
-            if (!authToken) {
-                window.location.href = 'index.html';
-                return false;
-            }
+            if (!authToken) { window.location.href='index.html'; return false; }
             try {
-                const res = await fetch(`${API_BASE_URL}/me`, {
-                    method: 'GET',
-                    headers: { 'X-Auth-Token': authToken }
-                });
-                if (!res.ok) {
-                    window.location.href = 'index.html';
-                    return false;
-                }
+                const res = await fetch(`${API_BASE_URL}/me`, {method:'GET', headers:{'X-Auth-Token': authToken}});
+                if (!res.ok) { window.location.href='index.html'; return false; }
                 const me = await res.json();
-                if (!me || me.role !== 'teacher') {
-                    window.location.href = 'index.html';
-                    return false;
-                }
+                if (!me || me.role!=='teacher') { window.location.href='index.html'; return false; }
                 return true;
-            } catch {
-                window.location.href = 'index.html';
-                return false;
-            }
+            } catch { window.location.href='index.html'; return false; }
         }
 
-        function setBackendBadge(ok) {
-            const badge = document.getElementById('backendStatusBadge');
-            if (!badge) return;
-            if (ok) {
-                badge.className = 'badge rounded-pill text-bg-success';
-                badge.innerText = '后端正常';
-            } else {
-                badge.className = 'badge rounded-pill text-bg-danger';
-                badge.innerText = '后端不可用';
-            }
-        }
-
-        async function pingBackend() {
+        /* ===================== Tab1: 排行榜 ===================== */
+        async function loadRanking() {
+            const tbody = document.getElementById('rankingTable');
             try {
-                const res = await fetch(`${API_BASE_URL}/`, { method: 'GET' });
-                setBackendBadge(res.ok);
-            } catch {
-                setBackendBadge(false);
+                const res = await fetch(`${API_BASE_URL}/teacher/ranking`, {headers: headers()});
+                const data = await res.json();
+                rankingCache = data || [];
+                renderRankingTable(rankingCache);
+            } catch(e) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">加载失败，请确认后端服务已启动。</td></tr>`;
             }
         }
-
         function renderRankingTable(data) {
             const tbody = document.getElementById('rankingTable');
-            if (!tbody) return;
-            if (!data || data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">暂无学生数据</td></tr>';
+            if (!data || !data.length) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-3 text-secondary">暂无学生数据</td></tr>`;
                 return;
             }
             tbody.innerHTML = data.map(r => `
                 <tr>
-                    <td><span class="badge bg-primary">${r.rank}</span></td>
+                    <td>${r.rank}</td>
                     <td>${r.username}</td>
-                    <td class="fw-bold kpi ${r.total_profit >= 0 ? 'text-success' : 'text-danger'}">¥${r.total_profit.toLocaleString()}</td>
-                    <td>${r.months_played} 月</td>
-                    <td>
-                        <button class="btn btn-sm btn-info" onclick="viewStudent(${r.user_id}, '${r.username.replaceAll("'", "\\'")}')">查看详情</button>
-                    </td>
+                    <td class="kpi fw-bold ${r.total_profit>=0?'text-success':'text-danger'}">¥ ${(r.total_profit||0).toLocaleString()}</td>
+                    <td>${r.months_played || 0} 月</td>
+                    <td><button class="btn btn-sm btn-outline-primary" type="button" data-user="${r.user_id}" data-name="${r.username}">查看详情</button></td>
+                </tr>
+            `).join('');
+            tbody.querySelectorAll('button[data-user]').forEach(b => b.addEventListener('click', () => loadStudentDetail(parseInt(b.dataset.user), b.dataset.name)));
+        }
+        async function loadStudentDetail(userId, name) {
+            document.getElementById('selectedStudentName').textContent = name;
+            document.getElementById('studentDetailSection').style.display = 'block';
+            const res = await fetch(`${API_BASE_URL}/student/history?user_id=${userId}`, {headers: headers()});
+            const data = await res.json();
+            const months = data.map(s => `第${s.month}月`);
+            const profits = data.map(s => s.profit||0);
+            if (profitChart) profitChart.destroy();
+            profitChart = new Chart(document.getElementById('profitChart'), {
+                type: 'line',
+                data: { labels: months, datasets: [{label:'每月利润', data: profits, borderColor:'#0d6efd', backgroundColor:'rgba(13,110,253,0.1)', fill:true, tension:0.25}] },
+                options: { responsive: true, plugins: { legend: {display:false} } }
+            });
+            document.getElementById('studentHistoryTable').innerHTML = data.map(s => {
+                const endCash = (s.cash||0) + (s.profit||0);
+                return `<tr>
+                    <td>${s.month}</td><td>${Math.round(s.forecast_demand||0)}</td><td>${Math.round(s.actual_demand||0)}</td>
+                    <td>${Math.round(s.actual_sales||0)}</td><td>¥${(s.revenue||0).toLocaleString()}</td>
+                    <td>¥${(s.total_cost||0).toLocaleString()}</td>
+                    <td class="${(s.profit||0)>=0?'text-success':'text-danger'}">¥${(s.profit||0).toLocaleString()}</td>
+                    <td>¥${endCash.toLocaleString()}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        /* ===================== Tab2: 学生账号 ===================== */
+        async function loadStudentList() {
+            const tbody = document.getElementById('studentListTable');
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center py-2"><div class="spinner-border spinner-border-sm"></div></td></tr>`;
+            const res = await fetch(`${API_BASE_URL}/teacher/students`, {headers: headers()});
+            const arr = await res.json();
+            if (!arr || !arr.length) { tbody.innerHTML = `<tr><td colspan="4" class="text-center py-3 text-secondary">暂无学生账号</td></tr>`; return; }
+            tbody.innerHTML = arr.map(u => `
+                <tr>
+                    <td>${u.id}</td><td>${u.username}</td><td>${u.role==='student'?'学生':'其他'}</td>
+                    <td><div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-warning" data-reset="${u.id}">重置密码123456</button>
+                        <button class="btn btn-sm btn-outline-danger" data-del="${u.id}">删除</button>
+                    </div></td>
+                </tr>
+            `).join('');
+            tbody.querySelectorAll('[data-reset]').forEach(b => b.addEventListener('click', () => resetStuPwd(parseInt(b.dataset.reset))));
+            tbody.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => delStu(parseInt(b.dataset.del))));
+        }
+        async function resetStuPwd(uid) {
+            if (!confirm('确定将此学生密码重置为 123456？')) return;
+            await fetch(`${API_BASE_URL}/teacher/students/${uid}/reset-password`, {method:'POST', headers: headers(), body: JSON.stringify({password:'123456'})});
+            alert('重置成功');
+            loadStudentList();
+        }
+        async function delStu(uid) {
+            if (!confirm('确定删除该学生账号？（含所有历史数据）')) return;
+            await fetch(`${API_BASE_URL}/teacher/students/${uid}`, {method:'DELETE', headers: headers()});
+            loadStudentList(); loadRanking();
+        }
+
+        /* ===================== Tab3: 游戏参数 ===================== */
+        function applyConfigToForm(cfg) {
+            document.querySelectorAll('[data-cfg]').forEach(input => {
+                const key = input.dataset.cfg;
+                if (cfg[key] === undefined) return;
+                input.value = cfg[key];
+            });
+        }
+        function collectConfigFromForm() {
+            const payload = {};
+            document.querySelectorAll('[data-cfg]').forEach(input => {
+                const key = input.dataset.cfg;
+                if (input.value === '' || input.value === null) return;
+                payload[key] = (input.step === '1' || Number.isInteger(parseFloat(input.step)))
+                    ? parseInt(input.value)
+                    : parseFloat(input.value);
+            });
+            return payload;
+        }
+        async function loadTeacherConfig() {
+            const res = await fetch(`${API_BASE_URL}/teacher/game-config`, {headers: headers()});
+            const cfg = await res.json();
+            applyConfigToForm(cfg);
+        }
+
+        /* ===================== Tab4: 需求模式核心 ===================== */
+        function switchDemandModeUI(mode) {
+            // Radio card active highlight
+            document.querySelectorAll('.mode-radio-card').forEach(card => card.classList.remove('active'));
+            document.getElementById('modeCard-' + mode)?.classList.add('active');
+            document.querySelectorAll('input[name=demandMode]').forEach(r => { r.checked = (r.value === mode); });
+            document.getElementById('demandModeBadge').textContent = MODE_LABEL[mode] || mode;
+            // 显隐对应section
+            document.getElementById('excelSection').style.display = (mode === 'excel_import') ? 'block' : 'none';
+            document.getElementById('curveSection').style.display = (mode === 'curve_preset') ? 'block' : 'none';
+        }
+        async function switchDemandMode(mode) {
+            switchDemandModeUI(mode);
+            try {
+                const res = await fetch(`${API_BASE_URL}/teacher/demand-mode`, {
+                    method:'PUT', headers: headers(),
+                    body: JSON.stringify({demand_mode: mode})
+                });
+                if (res.ok) {
+                    showTip('demandSuccessTip', true, '需求模式已切换：' + MODE_LABEL[mode] + '。学生刷新决策页即时生效。');
+                }
+            } catch(e) { showTip('demandErrorTip', false, '切换模式失败：' + e.message); }
+        }
+        async function loadDemandSummary() {
+            const res = await fetch(`${API_BASE_URL}/teacher/demand-summary`, {headers: headers()});
+            const sum = await res.json();
+            demandSummaryCache = sum;
+            switchDemandModeUI(sum.demand_mode);
+            renderDemandEditableTable(sum.list || []);
+            renderCurveParamsForm();
+            return sum;
+        }
+        function renderDemandEditableTable(list) {
+            const tbody = document.querySelector('#demandEditableTable tbody');
+            editableDemandRows = (list || []).map(r => ({month: r.month, base_demand: r.base_demand, source: r.source}));
+            const total = demandSummaryCache?.game_total_months || 12;
+            // 确保补齐总月数行
+            for (let m = 1; m <= total; m++) {
+                if (!editableDemandRows.find(r => r.month === m)) {
+                    editableDemandRows.push({month: m, base_demand: 400, source:'default'});
+                }
+            }
+            editableDemandRows.sort((a,b) => a.month - b.month);
+            tbody.innerHTML = editableDemandRows.map(r => `
+                <tr>
+                    <td>第 ${r.month} 月</td>
+                    <td><input type="number" min="1" step="1" class="form-control editable-cell demand-row-input"
+                         data-month="${r.month}" value="${Math.round(r.base_demand)}"></td>
+                    <td><span class="badge ${r.source==='excel'?'bg-success':r.source==='curve'?'bg-primary':r.source==='manual'?'bg-warning':'bg-secondary'}">${r.source||'default'}</span></td>
                 </tr>
             `).join('');
         }
-
-        function applyRankingFilter() {
-            const q = (document.getElementById('rankingSearch')?.value || '').trim().toLowerCase();
-            if (!q) {
-                renderRankingTable(rankingCache);
-                return;
-            }
-            renderRankingTable(rankingCache.filter(r => (r.username || '').toLowerCase().includes(q)));
+        function readDemandEditableIntoPayload() {
+            const rows = [];
+            document.querySelectorAll('.demand-row-input').forEach(inp => {
+                rows.push({month: parseInt(inp.dataset.month), base_demand: parseFloat(inp.value) || 400});
+            });
+            return rows;
         }
-
-        async function loadRanking() {
-            const errorEl = document.getElementById('teacherError');
-            if (errorEl) errorEl.classList.add('d-none');
-            try {
-                const response = await fetch(`${API_BASE_URL}/teacher/ranking`, {
-                    method: 'GET',
-                    headers: { 'X-Auth-Token': authToken }
-                });
-                if (!response.ok) {
-                    throw new Error('ranking api failed');
-                }
-                const data = await response.json();
-
-                rankingCache = data || [];
-                applyRankingFilter();
-            } catch (error) {
-                if (errorEl) {
-                    errorEl.innerText = '加载排行榜失败，请检查后端是否可访问（Render 免费版可能在休眠，稍等后刷新）。';
-                    errorEl.classList.remove('d-none');
-                }
-            }
+        function renderCurveParamsForm() {
+            const type = document.getElementById('curveType').value;
+            const container = document.getElementById('curveParamsForm');
+            const fields = CURVE_FIELDS[type] || [];
+            const params = getCurveParamsFormValues(true);
+            container.innerHTML = `<div class="row g-2">` + fields.map(f => `
+                <div class="col-md-6">
+                    <label class="form-label">${f.label}</label>
+                    <input type="number" id="curveParam-${f.key}" step="${f.step}" class="form-control" ${f.min!==undefined?`min="${f.min}"`:''} value="${params[f.key]??''}">
+                </div>
+            `).join('') + `</div>`;
         }
-
-        async function viewStudent(userId, username) {
-            document.getElementById('studentDetailSection').style.display = 'block';
-            document.getElementById('selectedStudentName').innerText = username;
-
-            try {
-                const response = await fetch(`${API_BASE_URL}/teacher/student/${userId}/history`, {
-                    method: 'GET',
-                    headers: { 'X-Auth-Token': authToken }
-                });
-                const data = await response.json();
-
-                if (data.length === 0) {
-                    document.getElementById('studentHistoryTable').innerHTML =
-                        '<tr><td colspan="8" class="text-center text-muted">暂无历史数据</td></tr>';
-                    return;
-                }
-
-                document.getElementById('studentHistoryTable').innerHTML = data.map(s => `
-                    <tr>
-                        <td>第 ${s.month} 月</td>
-                        <td>${s.forecast_demand}</td>
-                        <td>${s.actual_demand}</td>
-                        <td>${s.actual_sales}</td>
-                        <td>¥${(s.revenue || 0).toLocaleString()}</td>
-                        <td>¥${(s.total_cost || 0).toLocaleString()}</td>
-                        <td class="${s.profit >= 0 ? 'text-success' : 'text-danger'}">
-                            ¥${(s.profit || 0).toLocaleString()}
-                        </td>
-                        <td>¥${(s.cash || 0).toLocaleString()}</td>
-                    </tr>
-                `).join('');
-
-                renderChart(data);
-            } catch (error) {
-                console.error('加载学生历史失败:', error);
-            }
+        function getCurveParamsFormValues(useDefaultIfMissing) {
+            const type = document.getElementById('curveType').value;
+            const defaults = DEFAULT_CURVE_PARAMS[type]?.mid || {};
+            const fields = CURVE_FIELDS[type] || [];
+            const out = {...defaults};
+            fields.forEach(f => {
+                const el = document.getElementById('curveParam-'+f.key);
+                if (el && el.value !== '') out[f.key] = parseFloat(el.value);
+                else if (useDefaultIfMissing) { /* keep default */ }
+            });
+            return out;
         }
-
-        function renderChart(historyData) {
-            const ctx = document.getElementById('profitChart').getContext('2d');
-
-            if (profitChart) {
-                profitChart.destroy();
+        function applyCurvePresetLevel(level) {
+            const type = document.getElementById('curveType').value;
+            const preset = DEFAULT_CURVE_PARAMS[type]?.[level];
+            if (!preset) return;
+            // 先写默认值，再渲染表单
+            const fields = CURVE_FIELDS[type] || [];
+            renderCurveParamsForm();
+            fields.forEach(f => {
+                const el = document.getElementById('curveParam-'+f.key);
+                if (el) el.value = preset[f.key] ?? el.value;
+            });
+        }
+        async function postCurve(persist) {
+            const payload = { curve_type: document.getElementById('curveType').value, params: getCurveParamsFormValues(false), persist };
+            const res = await fetch(`${API_BASE_URL}/teacher/demand-plan/generate-curve`, {
+                method:'POST', headers: headers(), body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error((data && data.detail) || '生成失败');
+            renderDemandEnvelopeChart(data.envelope || []);
+            if (persist) {
+                renderDemandEditableTable(data.list || []);
+                showTip('demandSuccessTip', true, `曲线已应用保存：共 ${data.envelope?.length||0} 个月基准已写入数据库。`);
             }
-
-            const labels = historyData.map(s => `第 ${s.month} 月`);
-            const profits = historyData.map(s => s.profit || 0);
-            const revenues = historyData.map(s => s.revenue || 0);
-            const costs = historyData.map(s => s.total_cost || 0);
-
-            profitChart = new Chart(ctx, {
-                type: 'line',
+            return data;
+        }
+        function renderDemandEnvelopeChart(envelope) {
+            const labels = envelope.map(e => `第${e.month}月`);
+            const bases = envelope.map(e => e.base);
+            const lowLine = envelope.map(e => Math.round(e.base * (demandSummaryCache?.demand_variation_low || 0.7)));
+            const highLine = envelope.map(e => Math.round(e.base * (demandSummaryCache?.demand_variation_high || 1.3)));
+            const actualLine = envelope.map(e => e.actual_demand_seeded);
+            if (demandCurveChart) demandCurveChart.destroy();
+            demandCurveChart = new Chart(document.getElementById('demandCurveChart'), {
+                type: 'bar',
                 data: {
-                    labels: labels,
+                    labels,
                     datasets: [
-                        {
-                            label: '利润',
-                            data: profits,
-                            borderColor: 'rgb(75, 192, 192)',
-                            backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                            tension: 0.3,
-                            fill: true
-                        },
-                        {
-                            label: '收入',
-                            data: revenues,
-                            borderColor: 'rgb(54, 162, 235)',
-                            backgroundColor: 'rgba(54, 162, 235, 0.2)',
-                            tension: 0.3,
-                            fill: false
-                        },
-                        {
-                            label: '成本',
-                            data: costs,
-                            borderColor: 'rgb(255, 99, 132)',
-                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                            tension: 0.3,
-                            fill: false
-                        }
+                        { type:'bar', label:'基准需求量（中枢）', data:bases, backgroundColor:'rgba(13,110,253,0.55)', borderRadius:3, yAxisID:'y' },
+                        { type:'line', label:'波动下限（×low）', data:lowLine, borderColor:'rgba(108,117,125,0.6)', backgroundColor:'rgba(108,117,125,0.1)', fill:'+2', pointRadius:1, tension:0.2, yAxisID:'y' },
+                        { type:'line', label:'本月最终实际需求（全班一致）', data:actualLine, borderColor:'#198754', pointStyle:'rectRot', pointRadius:3, borderWidth:2, tension:0, fill:false, yAxisID:'y' },
+                        { type:'line', label:'波动上限（×high）', data:highLine, borderColor:'rgba(108,117,125,0.6)', backgroundColor:'rgba(108,117,125,0.1)', fill:false, pointRadius:1, tension:0.2, yAxisID:'y' }
                     ]
                 },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: '利润/收入/成本 趋势图'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            title: { display: true, text: '金额 (¥)' }
-                        }
-                    }
-                }
+                options: { responsive:true, maintainAspectRatio:false, interaction:{mode:'index', intersect:false},
+                    scales:{ y:{ beginAtZero:true, title:{display:true, text:'需求量'} }, x:{title:{display:true, text:'月份'}} } }
             });
         }
 
+        /* ===================== DOMContentLoaded 绑定事件 ===================== */
         document.addEventListener('DOMContentLoaded', async () => {
-            const ok = await ensureTeacherOrRedirect();
-            if (!ok) return;
-            loadRanking();
-            pingBackend();
-        });
-        document.getElementById('rankingSearch')?.addEventListener('input', applyRankingFilter);
-        document.getElementById('refreshRankingBtn')?.addEventListener('click', () => {
-            const tbody = document.getElementById('rankingTable');
-            if (tbody) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-secondary"><div class="spinner-border" role="status" aria-hidden="true"></div><div class="mt-2">加载中...</div></td></tr>';
-            }
-            ensureTeacherOrRedirect().then(ok => {
-                if (!ok) return;
-                loadRanking();
-                pingBackend();
+            if (!await ensureTeacherOrRedirect()) return;
+
+            // --- Tab1 排行榜 ---
+            document.getElementById('refreshRankingBtn').addEventListener('click', loadRanking);
+            document.getElementById('rankingSearch').addEventListener('input', (e) => {
+                const q = (e.target.value||'').toLowerCase().trim();
+                renderRankingTable(rankingCache.filter(r => (r.username||'').toLowerCase().includes(q)));
             });
+            loadRanking();
+
+            // --- Tab2 学生账号 ---
+            document.getElementById('studentCreateBtn').addEventListener('click', async () => {
+                const u = document.getElementById('studentCreateUsername').value.trim();
+                const p = document.getElementById('studentCreatePassword').value || '123456';
+                if (!u) return alert('请输入用户名');
+                await fetch(`${API_BASE_URL}/teacher/students/create`, {method:'POST', headers: headers(), body: JSON.stringify({username:u, password:p})});
+                alert('创建成功');
+                loadStudentList(); loadRanking();
+            });
+            document.getElementById('downloadStuTpl').addEventListener('click', () => window.open(`${API_BASE_URL}/teacher/students/template.xlsx?token=${encodeURIComponent(authToken)}`));
+            document.getElementById('studentImportBtn').addEventListener('click', async () => {
+                const f = document.getElementById('studentExcelFile').files[0];
+                if (!f) return alert('请先选择一个 .xlsx 文件');
+                const fd = new FormData(); fd.append('file', f);
+                const tip = document.getElementById('studentImportTip');
+                tip.textContent = '导入中...';
+                try {
+                    const res = await fetch(`${API_BASE_URL}/teacher/students/import-excel`, {method:'POST', headers:{'X-Auth-Token':authToken}, body: fd});
+                    const data = await res.json();
+                    tip.textContent = `导入成功：${data.imported||0} 个账号；失败：${data.failed||0}`;
+                    loadStudentList(); loadRanking();
+                } catch(e) { tip.textContent = '导入失败：'+e.message; }
+            });
+            document.getElementById('refreshStuListBtn').addEventListener('click', loadStudentList);
+            // --- Tab2 全班操作：重置 + 导出匿名排名 ---
+            const classOpTip = document.getElementById('classOperationTip');
+            document.getElementById('resetClassBtn').addEventListener('click', async () => {
+                const ok = confirm(
+                    '⚠️ 确认要重置全班为下一轮游戏吗？\n\n' +
+                    '✅ 保留：所有学生账号、教师参数配置、需求计划/曲线设置、导入的用户数据\n' +
+                    '❌ 清除：所有学生已玩月份 game_state、所有 monthly_report、累计利润排名\n' +
+                    '🔁 重置后：每位学生自动回到「第 1 月」初始状态（现金=初始、库存=初始）\n\n' +
+                    '请在全班学生都退出决策页后再操作，无法撤销！'
+                );
+                if (!ok) return;
+                classOpTip.textContent = '正在重置全班进度（约 1~3 秒）...';
+                classOpTip.className = 'mt-2 small text-warning';
+                try {
+                    const res = await fetch(`${API_BASE_URL}/teacher/reset_class`, {
+                        method: 'POST',
+                        headers: headers()
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        classOpTip.textContent = `✅ ${data.message}（共 ${data.students_total} 人，清除 game_state 行=${data.game_states_deleted}，重建初始月=${data.months_initialized}）`;
+                        classOpTip.className = 'mt-2 small text-success';
+                        loadStudentList(); loadRanking();
+                    } else {
+                        classOpTip.textContent = '❌ 重置失败：' + (data?.detail || JSON.stringify(data));
+                        classOpTip.className = 'mt-2 small text-danger';
+                    }
+                } catch (e) {
+                    classOpTip.textContent = '❌ 请求异常：' + e.message;
+                    classOpTip.className = 'mt-2 small text-danger';
+                }
+            });
+            document.getElementById('exportRankingBtn').addEventListener('click', async () => {
+                classOpTip.textContent = '正在生成匿名排名 Excel...';
+                classOpTip.className = 'mt-2 small text-warning';
+                try {
+                    const res = await fetch(`${API_BASE_URL}/teacher/export_class_ranking`, {
+                        method: 'GET',
+                        headers: headers()
+                    });
+                    if (!res.ok) {
+                        let msg = `HTTP ${res.status}`;
+                        try { const d = await res.json(); msg = d?.detail || JSON.stringify(d); } catch (_) {}
+                        classOpTip.textContent = '❌ 生成失败：' + msg;
+                        classOpTip.className = 'mt-2 small text-danger';
+                        return;
+                    }
+                    const blob = await res.blob();
+                    const disp = res.headers.get('Content-Disposition') || '';
+                    const fnameMatch = disp.match(/filename=(.+)/);
+                    const fname = fnameMatch ? fnameMatch[1].replace(/"/g, '') : '全班匿名排名.xlsx';
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = fname;
+                    document.body.appendChild(a); a.click(); a.remove();
+                    URL.revokeObjectURL(url);
+                    classOpTip.textContent = `✅ 已生成并下载：${fname}（3 个 Sheet：排名汇总 / 各月利润 / 各月预测对比；全部匿名，仅含排名列）`;
+                    classOpTip.className = 'mt-2 small text-success';
+                } catch (e) {
+                    classOpTip.textContent = '❌ 下载失败：' + e.message;
+                    classOpTip.className = 'mt-2 small text-danger';
+                }
+            });
+            loadStudentList();
+
+            // --- Tab3 游戏参数 ---
+            document.getElementById('resetConfigFormBtn').addEventListener('click', loadTeacherConfig);
+            document.getElementById('demandSeedRandomBtn').addEventListener('click', () => {
+                document.querySelector('[data-cfg=demand_seed]').value = Math.floor(Math.random()*9_999_999)+1000;
+            });
+            document.getElementById('saveConfigBtn').addEventListener('click', async () => {
+                const spin = document.getElementById('saveCfgSpin'); const text = document.getElementById('saveCfgText');
+                spin.classList.remove('d-none'); text.textContent = '保存中...';
+                try {
+                    const payload = collectConfigFromForm();
+                    const res = await fetch(`${API_BASE_URL}/teacher/game-config`, {method:'PUT', headers: headers(), body: JSON.stringify(payload)});
+                    const data = await res.json();
+                    if (res.ok) {
+                        showTip('cfgSuccessTip', true, '保存成功！所有参数已即时生效，学生端刷新即可看到。');
+                        applyConfigToForm(data.config);
+                        loadDemandSummary();
+                    } else {
+                        showTip('cfgErrorTip', false, '保存失败：' + (data?.detail || JSON.stringify(data)));
+                    }
+                } catch(e) { showTip('cfgErrorTip', false, '保存失败：' + e.message); }
+                finally { spin.classList.add('d-none'); text.textContent = '保存设置'; }
+            });
+            await loadTeacherConfig();
+
+            // --- Tab4 需求模式 ---
+            document.querySelectorAll('input[name=demandMode]').forEach(r => {
+                r.addEventListener('change', () => { if (r.checked) switchDemandMode(r.value); });
+            });
+            document.querySelectorAll('.mode-radio-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const r = card.querySelector('input[name=demandMode]');
+                    if (r && !r.checked) { r.checked = true; switchDemandMode(r.value); }
+                });
+            });
+            // B模式：Excel导入 + 表格保存/重置
+            document.getElementById('downloadDemandTplBtn').addEventListener('click', () => window.open(`${API_BASE_URL}/teacher/demand-plan/template.xlsx?token=${encodeURIComponent(authToken)}`));
+            document.getElementById('pickDemandExcelBtn').addEventListener('click', () => document.getElementById('demandExcelFile').click());
+            document.getElementById('demandExcelFile').addEventListener('change', async (e) => {
+                const f = e.target.files[0]; if (!f) return;
+                const fd = new FormData(); fd.append('file', f);
+                try {
+                    const res = await fetch(`${API_BASE_URL}/teacher/demand-plan/import-excel`, {method:'POST', headers:{'X-Auth-Token':authToken}, body: fd});
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail || '导入失败');
+                    renderDemandEditableTable(data.list || []);
+                    showTip('demandSuccessTip', true, `Excel 导入成功：写入 ${data.imported_months} 个月${(data.warnings||[]).length?`；提示：${data.warnings.join('；')}`:''}`);
+                } catch(err) { showTip('demandErrorTip', false, '导入失败：' + err.message); }
+            });
+            document.getElementById('saveDemandTableBtn').addEventListener('click', async () => {
+                const rows = readDemandEditableIntoPayload();
+                const res = await fetch(`${API_BASE_URL}/teacher/demand-plan/batch`, {method:'PUT', headers: headers(), body: JSON.stringify({rows})});
+                const data = await res.json();
+                if (res.ok) {
+                    renderDemandEditableTable(data.list || []);
+                    showTip('demandSuccessTip', true, `已保存 ${data.updated_months} 个月基准需求`);
+                } else showTip('demandErrorTip', false, '保存失败：' + (data.detail || ''));
+            });
+            document.getElementById('resetDemandTableBtn').addEventListener('click', async () => {
+                if (!confirm('确认清空当前所有每月基准，全部重置为默认 400？')) return;
+                const res = await fetch(`${API_BASE_URL}/teacher/demand-plan`, {method:'DELETE', headers: headers()});
+                const data = await res.json();
+                if (res.ok) { renderDemandEditableTable(data.list || []); showTip('demandSuccessTip', true, '已重置为默认 400'); }
+            });
+            // C模式：曲线
+            document.getElementById('curveType').addEventListener('change', () => { renderCurveParamsForm(); applyCurvePresetLevel('mid'); });
+            document.querySelectorAll('.preset-btn').forEach(btn => btn.addEventListener('click', () => applyCurvePresetLevel(btn.dataset.preset)));
+            document.getElementById('curvePreviewBtn').addEventListener('click', async () => { try { await postCurve(false); } catch(e){ showTip('demandErrorTip', false, e.message); }});
+            document.getElementById('curveApplyBtn').addEventListener('click', async () => { try { await postCurve(true); } catch(e){ showTip('demandErrorTip', false, e.message); }});
+
+            await loadDemandSummary();
+            // 曲线页默认加载一次预览
+            try { applyCurvePresetLevel('mid'); await postCurve(false); } catch {}
         });
     </script>
 </body>

@@ -1,290 +1,291 @@
 # 云端系统架构、使用与维护指南
 
-本文档介绍“供应链模拟游戏”云端版本的整体构成、上线方式、日常使用与维护要点。
+本文档面向「供应链模拟游戏」云端版本的**技术维护者 / 管理员**，讲解系统组成、部署上线、日常运维、故障排查的全流程。
+普通教师/学生使用系统请直接读 `README.md`，无需本手册。
 
-## 云端项目网址
+---
 
-- 前端地址（GitHub Pages）：https://xiaomiykw.github.io/supply-chain-game/
-- 后端服务地址（API）：https://supply-chain-game.onrender.com
-- 后端接口文档 + 在线调试（Swagger UI）：https://supply-chain-game.onrender.com/docs#/
-- Render 控制台（具体后端服务页）：https://dashboard.render.com/web/srv-d7v9sa3eo5us73egoe30
-- Neon 控制台（具体数据库项目页）：https://console.neon.tech/app/projects/ancient-morning-17856711
-- GitHub 仓库：https://github.com/XiaomiYKW/supply-chain-game
+## 0. 云端访问地址（现有部署）
 
-## 1. 云端系统由哪些部分构成
+可直接使用（Render 免费实例首次访问可能休眠 10~30 秒）：
 
-### 1.1 代码仓库（GitHub）
-- 作用：保存前端与后端代码；作为 Render 自动部署的来源；作为 Pages 发布静态站点的来源。
-- 分支：通常使用 `main` 作为发布分支。
+| 组件 | 链接 | 说明 |
+|---|---|---|
+| 前端（GitHub Pages） | https://xiaomiykw.github.io/supply-chain-game/ | 学生/教师登录入口（纯静态，免维护）|
+| 后端 API（Render） | https://supply-chain-game.onrender.com | 所有 HTTP 请求的后端服务（FastAPI） |
+| 接口文档 / 在线调试 | https://supply-chain-game.onrender.com/docs#/ | Swagger UI 在线直接调接口 |
+| Render 后端控制台 | https://dashboard.render.com/web/srv-d7v9sa3eo5us73egoe30 | 看日志、重启、改环境变量（需账号） |
+| Neon 数据库控制台 | https://console.neon.tech/app/projects/ancient-morning-17856711 | 备份、SQL Editor、重置数据（需账号）|
+| GitHub 代码仓库 | https://github.com/XiaomiYKW/supply-chain-game | 发版 = push main 分支 |
 
-### 1.2 前端（GitHub Pages：静态网站）
-- 作用：对外提供 `index.html/decision.html/report.html/teacher.html` 等页面。
-- 特点：纯静态文件（HTML/JS/CSS），不运行服务器逻辑。
-- 与后端交互：通过浏览器向后端 API 发起 HTTP 请求。
+---
 
-### 1.3 后端（Render：FastAPI 服务）
-- 作用：提供 API（登录、提交决策、结算、报告、教师统计等）；连接数据库；执行结算逻辑。
-- 关键点：
-  - Render 免费实例可能休眠；首次访问可能需要等待唤醒。
-  - 后端启动时会自动建表、并尝试为旧库补齐新增字段（schema 补列）。
+## 1. 系统组成（4 块）
 
-### 1.4 数据库（Neon：PostgreSQL）
-- 作用：保存 `users`、`game_state`、`game_config` 等数据；实现多账号历史留存与隔离。
-- 与后端关系：后端通过 `DATABASE_URL` 连接 Neon；所有读写都由后端完成。
-
-## 2. 云端访问与使用方式
-
-### 2.1 学生端使用
-1. 通过 GitHub Pages 打开前端站点：`https://xiaomiykw.github.io/supply-chain-game/` 。
-2. 输入用户名密码登录。
-3. 进入决策页提交本月决策，系统自动结算并跳转报告页。
-4. 在报告页查看：收入、成本拆分、利润、累计利润、趋势图与月度明细表。
-
-### 2.2 教师端使用
-1. 访问 `https://supply-chain-game.onrender.com/docs` 。
-2. 找到 POST /users/ ，点击 Try it out 。
-3. 输入 `{"username": "teacher1", "password": "请设置强密码", "role": "teacher"}` 并执行创建教师账号。
-4. 通过 GitHub Pages 打开前端站点：`https://xiaomiykw.github.io/supply-chain-game/` 。
-5. 教师端会通过 `/me` 校验 token 与角色；非教师无法进入教师端页面。
-
-
-## 3. 云端部署与更新（发布流程）
-1. 本地修改代码并提交到 GitHub：`git add` → `git commit` → `git push origin main`
-2. Render 自动拉取最新提交并重新部署（开启 Auto Deploy 时）。
-3. 前端走 GitHub Pages：Pages 来源为 `main` 分支（root）时，push 后会自动更新前端静态文件。
-
-## 4. 云端配置清单（搭建时必看）
-
-### 4.1 GitHub Pages 配置（前端发布）
-1. GitHub 仓库 → Settings → Pages
-2. Source 选择从 `main` 分支发布（通常为 root 目录）。
-3. 访问 Pages 提供的站点链接，确认能打开 `index.html` 并能正常请求后端。
-
-### 4.2 Render 配置（后端发布）
-Render Web Service 建议配置要点：
-- 代码来源：连接 GitHub 仓库 `XiaomiYKW/supply-chain-game`
-- Root Directory：`backend`
-- Build Command：`pip install -r requirements.txt`
-- Start Command：`uvicorn main:app --host 0.0.0.0 --port $PORT`
-- Environment Variables：
-  - `DATABASE_URL`：Neon 提供的 Postgres 连接串（不要提交到仓库）
-  - `PORT`：Render 会自动注入，一般无需手动设置
-
-### 4.3 Neon 配置（数据库）
-- 在 Neon 控制台创建项目与数据库，获取连接串（包含用户名、密码、host、db）。
-- 将连接串填入 Render 的 `DATABASE_URL` 环境变量。
-- 注意：连接账号需要有建表/改表权限（用于首次建表与补列）。
-
-## 5. 常见运维操作（发布后日常维护）
-
-### 5.1 Render 查看服务是否正常
-1. Render 控制台 → 进入服务 → 看 Deploy 状态与 Logs。
-2. 访问后端根路径 `/`（例如 `https://supply-chain-game.onrender.com`）应返回欢迎信息。
-
-### 5.2 Render 触发重新部署
-- Auto Deploy 开启：push 到 GitHub 后自动部署。
-- Auto Deploy 关闭：Render 控制台手动点 “Deploy latest commit”。
-
-### 5.3 数据库变更生效（自动建表/补列）
-- 更新代码后如新增字段：Render 重启/重新部署会触发后端启动逻辑，自动建表并对旧库补列。
-- 若日志出现 ALTER TABLE 失败：通常是权限不足或表不存在，先确认 Neon 连接账号权限与 `DATABASE_URL` 是否正确。
-
-### 5.4 新增/管理账号
-- 通过前端登录：
-  - 若账号不存在会自动注册为学生（当前前端逻辑）。
-- 通过后端接口：
-  - 使用 `POST /users/` 创建学生/教师账号。
-
-### 5.5 数据备份/导出（建议）
-- 课程关键节点（开课前/期中/期末）建议在 Neon 控制台对数据做一次导出或备份（至少包含 `users`、`game_state`、`game_config`）。
-- 若需要“保留成绩但重开新一轮”，建议备份后再执行重置 SQL。
-
-## Neon 重置游戏（可选）
-
-### A. 只重置游戏进度（保留账号）
-1. 不要长期使用 `DROP TABLE game_state;`（会导致后端报表不存在）。如果误删了表，请先重启后端服务让表自动重建。
-2. 清空历史并给每个学生重新插入第 1 月初始状态（在 Neon SQL Editor 运行）：
-```sql
-TRUNCATE TABLE game_state RESTART IDENTITY;
-
-INSERT INTO game_state (
-  user_id, month,
-  cash, raw_material_stock, finished_goods_stock,
-  is_submitted, is_settled
-)
-SELECT
-  u.id, 1,
-  c.initial_cash, c.initial_raw_stock, c.initial_fg_stock,
-  false, false
-FROM users u
-CROSS JOIN (
-  SELECT * FROM game_config ORDER BY id LIMIT 1
-) c
-WHERE u.role = 'student';
+```
+学生/教师浏览器  ──HTTPS──▶  GitHub Pages（静态 HTML/JS/CSS）
+                              │
+                              └──▶  Render（FastAPI 后端，端口 $PORT）
+                                        │
+                                        └──▶  Neon（PostgreSQL，持久化 DB）
+代码源：GitHub（main 分支自动触发 Pages 发布 + Render 重部署）
 ```
 
-不建议长期使用：
-- `DROP TABLE game_state;`（会导致后端查询报错；需要重启后端让表自动重建）
+| 组件 | 技术栈 | 作用 |
+|---|---|---|
+| ① GitHub Pages | 纯静态托管 | 对外提供 `index/decision/report/teacher 4 个 HTML + js/app.js`；不跑后端 |
+| ② Render Web Service | FastAPI + Uvicorn（Python） | 提供所有 API（登录、提交决策、结算、教师看板、重置、导出 xlsx） |
+| ③ Neon Serverless PostgreSQL | 关系型数据库 | 存 `users / game_state / game_config / demand_plan / user_role` 5 张表；历史留存、多账号隔离 |
+| ④ GitHub 仓库 | Git 版本管理 | 代码唯一来源；push main → Pages 与 Render 自动同步更新 |
 
-### B. 删除已有用户（Neon SQL Editor 使用）
+### Render 免费实例注意
+- 闲置 15 分钟会休眠 → 首次打开前端时请求可能卡 10~30 秒在等后端唤醒（正常）
+- 唤醒后第一次响应后一切正常
+- 建议开课前半小时由教师先打开一次前端让实例暖起来
 
-#### 1）先查一下有哪些用户（避免删错）
-```sql
-SELECT id, username, role FROM users ORDER BY id;
+---
+
+## 2. 云端使用流程（最终用户）
+
+### 2.1 学生端
+1. 浏览器打开：`https://xiaomiykw.github.io/supply-chain-game/`
+2. 输入教师给的账号密码登录
+3. 决策页填本月 4 个数字 → 提交自动结算 → 报告页看排名/利润/趋势
+4. 游戏玩完 12 个月（或教师设的 N 个月）自动封盘，报告页可看最终名次
+
+### 2.2 教师端
+1. 首次使用（建教师账号）：打开 `https://supply-chain-game.onrender.com/docs#/` → 找 `POST /users/` → Try it out → 填入：
+   ```json
+   {"username":"teacher1","password":"你设的强密码","role":"teacher"}
+   ```
+2. 回到 `https://xiaomiykw.github.io/supply-chain-game/` 用 teacher1 登录，自动识别角色进入教师端
+3. 教师端 Tab1~5 功能详情见 `README.md` 第四章（批量导入学生 / 重置全班 / 导出排名 / 参数设置 / 需求模式）
+
+> 教师常用的「全班重置」「匿名排名导出」「批量建号」**全部在教师前端页点按钮**，不用跑 SQL，避免手误。
+
+---
+
+## 3. 部署与更新（发布新代码）
+
+发布流程完全自动化（main 分支 → GitHub Pages + Render 双自动部署）：
+
+```bash
+# 本地改完代码
+git add .
+git commit -m "改了什么"
+git push origin main
 ```
 
-#### 2）删除单个指定用户（按用户名，最常用）
-把 `student1` 换成你要删的用户名即可：
-```sql
--- 先删该用户的游戏历史（game_state 有外键指向 users，必须先删）
-DELETE FROM game_state
-WHERE user_id = (SELECT id FROM users WHERE username = 'student1');
+- GitHub Pages：5 分钟内自动重发静态文件（Settings → Pages → Build and deployment → Source=Deploy from a branch，Branch=main / root）
+- Render：Auto Deploy 默认开启 → 自动拉取 main 最新 commit → pip install -r backend/requirements.txt → uvicorn 启服务 → 看 Render 控制台 Deploy Logs 是否绿色成功
 
--- 再删该用户本身
-DELETE FROM users
-WHERE username = 'student1';
+如果 Render Auto Deploy 关掉了，也可以进 Render 控制台对应服务 → 手动点 **Deploy latest commit**。
+
+---
+
+## 4. 首次从零搭建（新环境参考）
+
+如果要换账号/换项目，按以下 3 步搭建：
+
+### 4.1 GitHub + Pages（前端）
+1. 新建 GitHub 仓库，把本项目根目录全部文件推送到 `main`
+2. 仓库 → **Settings → Pages**
+   - Source：`Deploy from a branch`
+   - Branch：`main` / `/(root)`
+3. 等 Action 跑完，访问 `https://<username>.github.io/<repo>/` 能打开登录页
+
+### 4.2 Neon（PostgreSQL 数据库）
+1. https://console.neon.tech 登录 → 新建 Project
+   - Postgres version：选默认最新即可
+   - Region：离目标学生近（Asia 新加坡一般对国内延迟可接受）
+2. 建完后复制 **Connection string**（形如 `postgresql://user:pass@hostname/dbname?sslmode=require`），这是后续 Render 的 `DATABASE_URL` 环境变量
+
+### 4.3 Render（后端 API）
+1. https://dashboard.render.com → **New → Web Service**
+2. 连接刚建的 GitHub 仓库（授权 Render 访问）
+3. 关键配置：
+   | 字段 | 值 |
+   |---|---|
+   | **Root Directory** | `backend`（后端代码不在根目录，必须填 `backend`！）|
+   | **Runtime** | Python 3 |
+   | **Build Command** | `pip install -r requirements.txt` |
+   | **Start Command** | `uvicorn main:app --host 0.0.0.0 --port $PORT` |
+   | **Instance Type** | 免费 Free / Starter 都行 |
+   | **Region** | 跟 Neon 尽量同一个（都是新加坡/都是法兰克福，降低延迟）|
+4. Environment Variables 添加 1 条：
+   ```
+   DATABASE_URL = <刚才 Neon 复制的完整连接串>
+   ```
+5. 点 Create Web Service，等部署日志出现 `Uvicorn running on http://0.0.0.0:10000` 就成功了
+6. 验证：浏览器打开 Render 分配的 `https://xxx.onrender.com` 应返回欢迎 JSON
+
+### 4.4 首次建教师账号
 ```
-
-#### 3）删除单个指定用户（按 user_id）
-把 `123` 换成对应用户的 `id`：
-```sql
-DELETE FROM game_state WHERE user_id = 123;
-DELETE FROM users WHERE id = 123;
+打开 https://<你的Render域名>/docs#/
+POST /users/  →  Try it out  →
+  body: {"username":"teacher1","password":"强密码","role":"teacher"}
+  Execute → 200 OK
 ```
+以后每次新建库都要跑一次，否则没有教师账号。
 
-#### 4）删除所有学生账号（保留教师账号）
-适合新学期开学清理往届学生：
+### 4.5 前端 js/app.js 里后端地址检查
+确认 `js/app.js` 中生产环境请求的后端是你的 Render 域名（而不是本地 `http://127.0.0.1:8005`），一般写了 `API_BASE = window.location.hostname.includes('github.io') ? 'https://supply-chain-game.onrender.com' : 'http://127.0.0.1:8005'` 即可自动切换。
+
+---
+
+## 5. 日常运维操作
+
+### 5.1 验证服务是否正常（定期检查）
+1. **前端能打开？** 访问 Pages 地址看登录页
+2. **后端活着？** 访问 Render 域名根路径 `/` 应返回 `{"message":"Supply Chain Game API"}`
+3. **DB 连接正常？** Render Logs 搜 `ensure_schema completed` / `Connected` 无红色 Exception
+4. **接口能鉴权？** Swagger 里先 `POST /login` 拿 token → Authorize 填上 → `GET /me` 返回 200 + teacher1
+
+### 5.2 课前暖机（Render 免费实例）
+- 开课前 30 分钟：教师自己先打开一次 `https://xiaomiykw.github.io/supply-chain-game/` 登录，Render 实例被唤醒不会学生上课时卡 30 秒
+
+### 5.3 每轮结束重置全班（推荐用前端 UI，别手跑 SQL）
+> 前端 `teacher.html` → Tab2「全班操作」→ 🔴 **重置全班游戏**（二次确认）就够了。
+> 效果：删所有学生的 `game_state`，**不删**学生账号、不删 `game_config`、不删 `demand_plan`，然后每个学生自动重建「第1月初始状态」（现金/原料/成品 = GameConfig 里的初始值）。
+
+只有 UI 按钮失效时才用下面的 Neon SQL Editor 兜底：
+
 ```sql
--- 先删所有学生的历史数据
+-- ========== 只重置进度（保留账号/配置/曲线）==========
 DELETE FROM game_state
 WHERE user_id IN (SELECT id FROM users WHERE role = 'student');
 
--- 再删所有学生账号
-DELETE FROM users WHERE role = 'student';
-```
-
-#### 5）删除所有账号（包含教师，慎用！）
-删完之后教师账号也会消失，需要重新创建：
-```sql
-TRUNCATE TABLE game_state RESTART IDENTITY;
-TRUNCATE TABLE users RESTART IDENTITY CASCADE;
-```
-
-> ⚠️ 不推荐直接用 `DROP TABLE users;`，会导致表结构丢失，后续还要重启后端重建表，容易出问题。
-
-#### 6）只重置学生的游戏进度（保留学生账号，推荐每轮结束用）
-只清空历史决策和成绩，账号仍可直接登录：
-```sql
-DELETE FROM game_state
-WHERE user_id IN (SELECT id FROM users WHERE role = 'student');
-
--- 给所有学生重新插入第 1 月初始状态
-INSERT INTO game_state (
-  user_id, month,
-  cash, raw_material_stock, finished_goods_stock,
-  is_submitted, is_settled
-)
-SELECT
-  u.id, 1,
-  c.initial_cash, c.initial_raw_stock, c.initial_fg_stock,
-  false, false
+INSERT INTO game_state (user_id, month, cash, raw_material_stock, finished_goods_stock, is_submitted, is_settled)
+SELECT u.id, 1, c.initial_cash, c.initial_raw_stock, c.initial_fg_stock, false, false
 FROM users u
 CROSS JOIN (SELECT * FROM game_config ORDER BY id LIMIT 1) c
 WHERE u.role = 'student';
 ```
 
-## 后端 Swagger UI 使用手册（https://supply-chain-game.onrender.com/docs#/）
+### 5.4 新学期开学：删往届学生（保留教师）
+教师前端 Tab1 批量删，或 Neon SQL Editor 兜底：
+```sql
+-- 先删历史（有外键，不能先删 users）
+DELETE FROM game_state
+WHERE user_id IN (SELECT id FROM users WHERE role = 'student');
+-- 再删账号
+DELETE FROM users WHERE role = 'student';
+```
+之后回教师端 Tab1 用 Excel 批量导入新一届学生。
 
-`https://supply-chain-game.onrender.com/docs#/` 是后端 FastAPI 自动生成的「接口说明书 + 在线调试工具（Swagger UI）」。
+### 5.5 数据备份（关键节点必做）
+**建议备份时间点：** 开学前 / 期中考试后 / 期末考试导出排名后
 
-### 1）它是干什么的
-- 看所有后端接口（GET/POST）、要传哪些参数、返回哪些字段。
-- 直接在网页里点 `Try it out` → 填参数 → `Execute` 就能调用接口测试（不用 Postman / curl）。
-- 常用于创建教师账号、查游戏状态、看配置、验证接口是否正常。
-
-### 2）常用接口一览
-| 接口 | 用途 |
-|---|---|
-| `POST /users/` | 创建账号（学生或教师）。body 示例：`{"username":"...","password":"...","role":"student"}` 或 `"teacher"` |
-| `POST /login` | 登录，返回 `token`（前端存到 localStorage） |
-| `GET /me` | 用 token 反查当前登录用户是谁、角色是什么（`X-Auth-Token` 请求头） |
-| `GET /game_state/{user_id}` | 查看某学生当前处于第几月、现金/库存/决策情况 |
-| `POST /submit_decision` | 学生提交本月决策（前端决策页调用） |
-| `GET /report/{user_id}` | 查看某学生最新已结算报告（含累计利润） |
-| `GET /history/{user_id}` | 查看某学生全部已结算月份历史（含逐月成本拆分） |
-| `GET /teacher/ranking` | 教师：全班累计利润排行榜（需要教师 token） |
-| `GET /teacher/students` | 教师：学生账号列表（需要教师 token） |
-| `GET /teacher/student/{user_id}/history` | 教师：单个学生全部历史（需要教师 token） |
-| `GET /game_config` | 查看当前全部游戏参数（售价/仓库/难度/固定成本/缺货惩罚等） |
-
-### 3）怎么用（举例：创建教师账号）
-1. 打开 `https://supply-chain-game.onrender.com/docs#/`。
-2. 找到 **Users** 分组下的 `POST /users/`。
-3. 点右边 **Try it out**。
-4. 在 Request body 里粘贴（把密码换成强密码）：
-   ```json
-   {"username":"teacher1","password":"请设置强密码","role":"teacher"}
+1. **Neon 控制台** → 选项目 → **Branches / Restore / Export**（Neon 自带 point-in-time restore 是最佳实践）
+2. 或者用 pg_dump（本地装了 PostgreSQL 客户端）：
+   ```bash
+   pg_dump "postgresql://user:pass@host/dbname?sslmode=require" -F c -f backup_202XMMDD.dump
    ```
-5. 点 **Execute**；返回 `200` 和用户对象即创建成功。
-6. 随后到前端 `https://xiaomiykw.github.io/supply-chain-game/` 用这个账号登录即可进入教师端。
+3. 不建议长期依赖 `DROP TABLE` / 删库重建，容易触发表结构不一致；有问题一般先 5.1 诊断。
 
-### 4）怎么调用需要鉴权的教师接口
-1. 先在 `POST /login` 用教师账号登录，拿到返回的 `token`。
-2. 点页面右上角 **Authorize**（小锁图标），在 value 里填入这个 `token` → 授权。
-3. 再调用 `/teacher/*` 接口就会自动带上 `X-Auth-Token` 请求头。
-4. 若出现 401：重新登录换 token；出现 403：当前账号不是 teacher 角色。
+---
 
-### 5）注意点
-- 如果页面打开一直转圈/加载不出来：Render 免费实例可能休眠，等 10~30 秒刷新。
-- 学生玩游戏不需要访问这个 `/docs` 页面，只用前端 Pages 地址即可。
+## 6. FastAPI 接口速查（维护手册）
 
-## 让其他人也能管理 Render / Neon 项目（协作者共享）
+所有需要鉴权的接口，在 Swagger UI 里先 `POST /login` 拿 token → 点右上角小锁 **Authorize** → 粘贴 token 才能成功。
 
+| 方法 | 路径 | 鉴权 | 用途 |
+|---|---|---|---|
+| POST | `/users/` | 否 | 新建用户（student / teacher） |
+| POST | `/login` | 否 | 登录拿 `token`（前端存在 localStorage，请求头 `X-Auth-Token`）|
+| GET | `/me` | 是（任意角色） | 反查当前登录用户信息（含 role）|
+| GET | `/game-config` | 是（教师读 / 学生读） | 读全部游戏参数（售价/仓库/难度/总月数/需求种子…）|
+| PUT | `/teacher/game-config` | 是（仅教师） | 局部改游戏参数（支持只改 1 个，body 用哪个字段传哪个）|
+| GET | `/teacher/demand-mode` | 是（仅教师） | 查当前需求模式（excel_import / curve_preset）+ 需求种子 |
+| PUT | `/teacher/demand-mode` | 是（仅教师） | 切模式 + 改需求种子（`demand_mode` / `demand_seed`）|
+| POST | `/teacher/reset_class` | 是（仅教师） | **前端按钮"重置全班"调用的接口**，推荐代替手动 SQL |
+| GET | `/teacher/export_class_ranking` | 是（仅教师） | **前端按钮"导出匿名排名 Excel"**，返回 xlsx 的 `StreamingResponse`，文件名严格 RFC6266 编码 |
+| GET | `/teacher/students` | 是（仅教师） | 列表：全班学生账号、进度、累计利润（Tab1 用）|
+| GET | `/teacher/ranking` | 是（仅教师） | 排名：累计利润降序 + 已玩月数作为第二排序键（Tab5 用）|
+| GET | `/teacher/demand-summary` | 是（仅教师） | 查 1~N 月每月基准需求（demand_plan 表，来自 Excel/曲线）|
+| PUT | `/teacher/demand-plan/bulk` | 是（仅教师） | 批量写每月基准需求（Tab4 表格保存用）|
+| POST | `/teacher/demand-plan/curve` | 是（仅教师） | 给曲线类型+总月数，后端生成每月基准需求（Tab4 生成并预览用）|
+| POST | `/teacher/students/import` | 是（仅教师） | 上传 xlsx 批量创建学生账号（Tab1）|
+| GET | `/game_state/{user_id}` | 是（学生只看自己 / 教师看任意） | 某学生当前处于第几月、现金/库存/已填决策 |
+| POST | `/submit_decision` | 是（仅学生） | 提交本月 4 项决策 → 自动结算 → 返回 GameState |
+| GET | `/report/{user_id}` | 是（学生只看自己 / 教师看任意） | 最近已结算月报告（含累计利润、成本拆分、forecast/production/supplier1/2 决策记录）|
+| GET | `/history/{user_id}` | 是（学生只看自己 / 教师看任意） | 全部已结算月历史列表（画趋势图、月度明细表）|
+| DELETE | `/teacher/students/{user_id}` | 是（仅教师） | 删除某学生账号 + 对应全部历史 |
+| POST | `/teacher/students/{user_id}/reset` | 是（仅教师） | 重置单个学生回第 1 月（保留账号）|
 
-### 1）Neon 项目加协作者
-项目地址：https://console.neon.tech/app/projects/ancient-morning-17856711
+### 鉴权规则（关键）
+- 所有学生接口：`Depends(get_current_user)` + 校验 `role=student` 且 `user.id == path 里 user_id`（不能看别人）
+- 所有 `/teacher/*` 接口：`Depends(get_current_teacher)` 强制 `role=teacher`
+- 前端统一把 token 写在 `X-Auth-Token` 请求头；收到 HTTP 401 → 前端自动删 localStorage 并跳登录页（避免旧 token 死循环）
 
-1. 进入项目页面，找到 **Members** / **Invite**（或 Project settings → Members）。
-2. 点 **Invite member / Add member**，输入对方的 Neon 登录邮箱。
-3. 建议角色：
-   - 技术维护：`Admin` 或 `Owner`（能改连接串、重置、备份）
-   - 助教/老师：`Viewer`（只读，避免误删）
-4. 对方收到邮箱邀请链接后确认即可加入。
+---
 
-### 2）Render 项目加协作者
-项目地址：https://dashboard.render.com/web/srv-d7v9sa3eo5us73egoe30
+## 7. 数据库表结构（维护时参考）
 
-Render 分「个人账号项目」和「Team 项目」：
-- **个人账号下的项目**：不能直接加协作者，需要先升级/转移到 **Team**，再在 Team 里发邮箱邀请。
-- **Team 下的项目**：进入 Team → **Team Members** → **Invite Member**，分配角色后发送。
-- 免费版 Team 通常支持少数协作者，具体以 Render 当前政策为准。
+| 表名 | 用途 | 关键字段 |
+|---|---|---|
+| `users` | 账号表 | `id / username / password_hash / role (student|teacher) / display_name` |
+| `user_role` | 角色表 | `user_id / role`（通常与 users.role 同步，兼容多角色扩展）|
+| `game_state` | 每月状态 + 决策 + 结算结果 | 每个学生每月 1 条：`user_id / month / is_submitted / is_settled`；决策：`forecast_demand / production_quantity / purchase_supplier_1 / purchase_supplier_2`；结算：`actual_demand / actual_sales / revenue / total_cost / profit / cumulative_profit / 各成本项…` |
+| `game_config` | 全局单例配置表 | **22+ 参数全在这里**：价格、交期、产能、仓库容量、6 项成本/惩罚、初始值、`game_total_months`（总月数）、`demand_mode`、`demand_seed`、`demand_variation_low/high` |
+| `demand_plan` | 每月基准需求（1-N 月） | `month / base_demand / source（excel_import / curve_xxx）`；全班统一，来自 Tab4 Excel 或曲线 |
 
-### 3）GitHub 仓库加协作者（可选，方便一起改代码）
-1. 进入 https://github.com/XiaomiYKW/supply-chain-game
-2. **Settings → Collaborators and teams → Add people**
-3. 输入对方 GitHub 用户名，给 `Write` 权限即可（尽量不要给 `Admin`）。
+### 自动建表 + Schema 补列（无需手跑 SQL）
+- `main.py` 启动 → `ensure_schema()` 自动：
+  1. `CREATE TABLE IF NOT EXISTS` 建 5 张表
+  2. `PRAGMA table_info(xxx) / SELECT column_name FROM information_schema.columns`（分别适配 SQLite / PostgreSQL）查现有列
+  3. 缺列就 `ALTER TABLE ADD COLUMN xxx` 补齐（`demand_mode`、`total_months`、`demand_seed`、`demand_plan` 表都是这么加的）
+- **因此代码升级只需 push + Render 重启**，不会因为老库缺列崩。
 
-## 6. 故障排查清单（最常见问题）
+---
 
-### 6.1 前端提示“操作失败/后端不可用”
-排查顺序：
-1. Render 是否休眠：等待 10~30 秒再刷新。
-2. 后端根路径 `/` 是否能访问。
-3. 前端请求的后端地址是否正确（生产环境应指向 Render URL）。
-4. CORS 是否允许（本项目已放开 `*`）。
+## 8. 常见故障排查
 
-### 6.2 教师端无法加载/403/401
-- 先确认教师账号登录成功，并且浏览器 localStorage 里存在 `authToken`。
-- 教师接口必须带 `X-Auth-Token`，且 token 对应账号角色为 `teacher`。
-- 学生访问教师端页面会被强制跳回首页，这是预期行为。
+| 现象 | 排查顺序 |
+|---|---|
+| 前端打开但登录一直「网络错误」 | ① Render 是否休眠（等 30s 刷）；② 看浏览器控制台 Network 登录请求返回啥（5xx / CORS / DNS）；③ 直接访问 `https://supply-chain-game.onrender.com/` 看通不通 |
+| 登录成功但教师端学生列表空 / 排名 0 | ① localStorage 里 `authToken` 过期 → 退出重新登录；② 接口 401/403 → 看 Network 响应体（多半是学生 token 访问 teacher 接口或 token 过期）|
+| Render 部署失败 | ① Build Log：requirements 版本不兼容 / pip 装不上（升级 setuptools/wheel）；② Start Log：`DATABASE_URL` 漏了或格式不对；③ Root Directory 忘了填 `backend` 导致找不到 main.py |
+| 导出匿名排名 Excel 500 | ① Render 日志有没有 `openpyxl` ImportError（`pip install openpyxl` 并确认 requirements.txt 里有）；② StreamingResponse Content-Disposition 中文文件名 → 本项目用了 RFC 6266 双 header（ASCII fallback + filename*=UTF-8''%XX），浏览器一般没问题；特殊浏览器检查响应头 |
+| 学生说全班同月实际需求不一样 | ① 查所有学生 `game_state where month=X` 的 `actual_demand` 是否完全一样；② 检查 `game_config.demand_seed` 是否有值（null 会每次随机，`ensure_schema` 已默认为 `12345`）；③ 已结算月份（is_settled=True）不会重算——**这是强约束**，一旦某学生月 X is_settled，任何情况下不能覆盖 |
+| /teacher/reset_class 返回成功但学生还是老月份 | 接口逻辑：删所有 student 的 game_state → 对每个 student 重建 `month=1`；检查后端 `ensure_schema()` 里 `demand_plan` 表是否建对，否则 GET 404 不影响重置 |
+| 决策提交后月数不推进 | ① 是否超过 `game_total_months`（封盘了不能提交），看 finishedBanner 是否出现；② 当月是否 `is_settled=True` 了重复提交；③ 看 Network `/submit_decision` 返回是否 200，有 error 前端会红字展示 |
 
-### 6.3 数据库字段缺失导致报错
-1. 确认 Render 已部署到最新代码并重启过（触发补列逻辑）。
-2. 查看 Render Logs 中是否有 ALTER TABLE 相关错误（权限不足、表不存在等）。
+---
 
-## 7. 安全与维护建议
+## 9. 安全与维护建议
 
-- 不要把数据库连接串（Neon `DATABASE_URL`）提交到仓库；只放在 Render 环境变量。
-- 教师端权限只依赖 token + 角色校验；请妥善保管教师账号密码。
-- token 会在每次登录时刷新；若教师端提示 401，通常重新登录即可。
-- 课程结束后建议重置 `game_state`，保留 `users` 或按需要清理账号。
+1. **密钥安全**
+   - Neon `DATABASE_URL` 只存 Render 环境变量，**绝对不要 commit 进 git**
+   - 教师账号不要用 `123` 这种弱密码（教学演示后应改）
+
+2. **鉴权安全**
+   - 所有接口 token 校验闭环：学生 6 个 + 教师 N 个接口全部带 `Depends`；测试时可以去掉某一个看是否立即 401
+   - 学生越权访问别人 `user_id` 直接 403
+
+3. **版本控制 & 回滚**
+   - Render 控制台 → History 可一键回滚到上一个成功部署；出事最快恢复
+   - Neon point-in-time restore 按时间回溯数据（比手跑 SQL 备份安全得多）
+
+4. **定期备份**
+   - 建议每学期结束：① 先前端导出匿名排名 Excel 归档成绩 ② Neon 备份一次分支 ③ 再重置全班准备下一轮
+
+5. **禁用学生自注册（如需严格管理）**
+   - 本项目当前 `POST /users/` 接口默认开放；如果要改成"只有教师能批量建号"，请在 main.py 里给该接口加 `Depends(get_current_teacher)`，并把前端 index.html 注册入口按钮隐藏即可
+
+---
+
+## 附录 A：Render 环境变量清单（最小可用）
+
+| 变量名 | 必填 | 示例值 | 说明 |
+|---|---|---|---|
+| `DATABASE_URL` | ✅ 是 | `postgresql://xxx:yyy@ep-xxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require` | Neon 给的完整连接串 |
+| `PORT` | ❌ 否 | Render 自动注入（一般 10000） | 代码里写 `--port $PORT` 就不用管 |
+| `PYTHON_VERSION` | ❌ 否 | `3.11.8` | Render 自动选；如果 `requirements` 装不上可以显式指定版本 |
+| `SECRET_KEY` | ❌ 建议有 | 自己生成 32 位随机串 | JWT 签名密钥；留空会回退到代码里的默认，最好自己设 |
+
+## 附录 B：协作权限管理（多管理员）
+
+- **GitHub 仓库**：Settings → Collaborators → 加协作者给 Write 权限（技术维护）/ Read 权限（老师只读）
+- **Render**：个人账号下项目不能直接加人；如果要多人管需要先把项目迁到 **Team**，再发邮箱邀请
+- **Neon**：Project Settings → Members → 邀请：技术维护给 Admin，给老师/助教 Viewer（只读，避免手误删数据）

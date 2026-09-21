@@ -27,7 +27,7 @@
         <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
             <div>
                 <h2 class="mb-1">第 <span id="reportMonth">-</span> 月结算报告</h2>
-                <div class="text-secondary small">建议：先看利润，再结合趋势图判断是否“缺货”或“积压”。</div>
+
             </div>
             <div class="d-flex gap-2">
                 <a href="decision.html" class="btn btn-primary">继续下一月</a>
@@ -40,28 +40,26 @@
                     <div class="card-header bg-success text-white">销售结果</div>
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-6">
+                            <div class="col-md-4">
                                 <div class="p-3 rounded-3 border bg-white h-100">
-                                    <div class="text-secondary small">实际需求</div>
+                                    <div class="text-secondary small">你的预测需求</div>
+                                    <div class="h4 mb-0 kpi" id="forecastDemand">-</div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="p-3 rounded-3 border bg-white h-100">
+                                    <div class="text-secondary small">系统实际需求</div>
                                     <div class="h4 mb-0 kpi" id="actualDemand">-</div>
                                 </div>
                             </div>
-                            <div class="col-6">
+                            <div class="col-md-4">
                                 <div class="p-3 rounded-3 border bg-white h-100">
-                                    <div class="text-secondary small">实际销售</div>
-                                    <div class="h4 mb-0 kpi" id="actualSales">-</div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="p-3 rounded-3 border bg-white">
                                     <div class="text-secondary small">销售收入</div>
                                     <div class="h4 mb-0 kpi" id="revenue">¥0</div>
                                 </div>
                             </div>
                         </div>
-                        <div class="alert alert-light border mt-3 mb-0 small">
-                            实际销售 = min(可用成品, 实际需求)。若实际销售明显小于需求，说明发生缺货。
-                        </div>
+
                     </div>
                 </div>
             </div>
@@ -126,9 +124,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="alert alert-light border mt-3 mb-0 small">
-                            总成本包含采购成本、库存持有成本、库存超仓超额成本，以及固定成本/缺货惩罚/负现金利息（如启用）。
-                        </div>
+
                     </div>
                 </div>
             </div>
@@ -137,11 +133,62 @@
         <div class="card border-0 shadow-sm mt-4 mb-4">
             <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
                 <span>历史趋势</span>
-                <span class="small opacity-75">利润 / 收入 / 成本</span>
+                <span class="small opacity-75">我的利润 / 收入 / 成本</span>
             </div>
             <div class="card-body">
                 <canvas id="historyChart" height="110"></canvas>
                 <div class="text-secondary small mt-2">趋势图来自历史已结算月份，可用于判断策略是否稳定。</div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+                        <span>我的班级排名</span>
+                        <span class="small opacity-75">保密展示，仅可见名次</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex align-items-center justify-content-around flex-wrap gap-3">
+                            <div class="text-center">
+                                <div class="text-secondary small">当前排名</div>
+                                <div class="display-6 kpi fw-semibold text-primary" id="myRank">-</div>
+                                <div class="small text-secondary">
+                                    共 <span id="totalStudents">0</span> 名学生
+                                </div>
+                            </div>
+                            <div class="vr d-none d-md-block"></div>
+                            <div class="text-center">
+                                <div class="text-secondary small">与第一名利润差</div>
+                                <div class="h3 kpi fw-semibold text-danger" id="profitGap">-</div>
+                                <div class="small text-secondary" id="profitGapDesc"></div>
+                            </div>
+                            <div class="vr d-none d-md-block"></div>
+                            <div class="text-center">
+                                <div class="text-secondary small">第一名累计利润</div>
+                                <div class="h3 kpi fw-semibold text-success" id="firstTotalProfit">-</div>
+                                <div class="small text-secondary">已完成 <span id="firstMonthsPlayed">0</span> 月</div>
+                            </div>
+                        </div>
+                        <div class="alert alert-light border mt-3 mb-0 small">
+                            💡 提示：第一名的具体学生姓名已匿名展示，您只能看到自己的名次和与第一名的趋势对比。
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card border-0 shadow-sm h-100">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <span>对比累计利润趋势</span>
+                        <span class="small opacity-75">我 vs 当前第一名</span>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="compareChart" height="110"></canvas>
+                        <div class="text-secondary small mt-2">
+                            可直观看到自己与第一名的累计利润差距变化趋势，及时调整策略追赶。
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

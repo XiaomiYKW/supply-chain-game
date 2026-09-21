@@ -1,6 +1,13 @@
 import random
 
 def calculate_monthly_results(current_state, config, prev_states=None):
+    """
+    实际需求 actual_demand 生成策略（幂等：已生成则直接跳过）：
+    1. 上层 main.py 已按班级统一的 「DemandPlan base × seeded_variation（同班同月一致）」
+       注入到 state._demand_base_for_calc / state._demand_variation_for_calc，
+       确保同月全班 actual_demand 100%一字不差。
+    2. 兜底：若上层未注入（例如异常情况），则按 base=400 × 本地随机波动 兜底，避免 0 值产生。
+    """
     if current_state.actual_demand is None or current_state.actual_demand == 0:
         low = config.demand_variation_low if getattr(config, "demand_variation_low", None) is not None else 0.8
         high = config.demand_variation_high if getattr(config, "demand_variation_high", None) is not None else 1.2
@@ -10,8 +17,19 @@ def calculate_monthly_results(current_state, config, prev_states=None):
             high = 1.2
         if low > high:
             low, high = high, low
-        variation = random.uniform(low, high)
-        current_state.actual_demand = round(current_state.forecast_demand * variation)
+
+        injected_base = getattr(current_state, "_demand_base_for_calc", None)
+        injected_variation = getattr(current_state, "_demand_variation_for_calc", None)
+
+        if injected_base is not None and injected_variation is not None:
+            # ---- 教师预设模式（excel_import / curve_preset）：同月全班 actual_demand 一字不差 ----
+            base_val = float(injected_base)
+            var_val = float(injected_variation)
+            current_state.actual_demand = round(base_val * var_val)
+        else:
+            # ---- 兜底：400平稳 × 本地随机波动（仅用于异常情况，保证全班月基准相近） ----
+            variation = random.uniform(low, high)
+            current_state.actual_demand = round(400.0 * variation)
 
     purchase_supplier_1 = current_state.purchase_supplier_1 or 0
     purchase_supplier_2 = current_state.purchase_supplier_2 or 0
