@@ -407,6 +407,17 @@
 
         /* ===================== 通用工具 ===================== */
         function headers() { return { 'X-Auth-Token': authToken, 'Content-Type': 'application/json' }; }
+        function checkAuthAndRedirect(res) {
+            if (res.status === 401) {
+                localStorage.removeItem('authToken');
+                localStorage.removeItem('role');
+                localStorage.removeItem('username');
+                alert('登录已过期，请重新登录');
+                window.location.href = 'index.html';
+                return true;
+            }
+            return false;
+        }
         function showTip(elId, ok, msg) {
             const el = document.getElementById(elId);
             if (!el) return;
@@ -457,26 +468,47 @@
         async function loadStudentDetail(userId, name) {
             document.getElementById('selectedStudentName').textContent = name;
             document.getElementById('studentDetailSection').style.display = 'block';
-            const res = await fetch(`${API_BASE_URL}/student/history?user_id=${userId}`, {headers: headers()});
-            const data = await res.json();
-            const months = data.map(s => `第${s.month}月`);
-            const profits = data.map(s => s.profit||0);
-            if (profitChart) profitChart.destroy();
-            profitChart = new Chart(document.getElementById('profitChart'), {
-                type: 'line',
-                data: { labels: months, datasets: [{label:'每月利润', data: profits, borderColor:'#0d6efd', backgroundColor:'rgba(13,110,253,0.1)', fill:true, tension:0.25}] },
-                options: { responsive: true, plugins: { legend: {display:false} } }
-            });
-            document.getElementById('studentHistoryTable').innerHTML = data.map(s => {
-                const endCash = (s.cash||0) + (s.profit||0);
-                return `<tr>
-                    <td>${s.month}</td><td>${Math.round(s.forecast_demand||0)}</td><td>${Math.round(s.actual_demand||0)}</td>
-                    <td>${Math.round(s.actual_sales||0)}</td><td>¥${(s.revenue||0).toLocaleString()}</td>
-                    <td>¥${(s.total_cost||0).toLocaleString()}</td>
-                    <td class="${(s.profit||0)>=0?'text-success':'text-danger'}">¥${(s.profit||0).toLocaleString()}</td>
-                    <td>¥${endCash.toLocaleString()}</td>
-                </tr>`;
-            }).join('');
+            const historyTbody = document.getElementById('studentHistoryTable');
+            historyTbody.innerHTML = `<tr><td colspan="8" class="text-center py-2"><div class="spinner-border spinner-border-sm"></div></td></tr>`;
+            try {
+                const res = await fetch(`${API_BASE_URL}/teacher/student/${userId}/history`, {headers: headers()});
+                if (checkAuthAndRedirect(res)) return;
+                if (!res.ok) {
+                    historyTbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">加载失败（HTTP ${res.status}），请刷新重试。</td></tr>`;
+                    return;
+                }
+                const data = await res.json();
+                if (!Array.isArray(data)) {
+                    historyTbody.innerHTML = `<tr><td colspan="8" class="text-center text-secondary">暂无历史结算数据</td></tr>`;
+                    if (profitChart) profitChart.destroy();
+                    return;
+                }
+                if (!data.length) {
+                    historyTbody.innerHTML = `<tr><td colspan="8" class="text-center py-3 text-secondary">该学生尚未结算任何月份，请先在学生端提交并结算后再查看。</td></tr>`;
+                    if (profitChart) profitChart.destroy();
+                    return;
+                }
+                const months = data.map(s => `第${s.month}月`);
+                const profits = data.map(s => s.profit||0);
+                if (profitChart) profitChart.destroy();
+                profitChart = new Chart(document.getElementById('profitChart'), {
+                    type: 'line',
+                    data: { labels: months, datasets: [{label:'每月利润', data: profits, borderColor:'#0d6efd', backgroundColor:'rgba(13,110,253,0.1)', fill:true, tension:0.25}] },
+                    options: { responsive: true, plugins: { legend: {display:false} } }
+                });
+                historyTbody.innerHTML = data.map(s => {
+                    const endCash = (s.cash||0) + (s.profit||0);
+                    return `<tr>
+                        <td>${s.month}</td><td>${Math.round(s.forecast_demand||0)}</td><td>${Math.round(s.actual_demand||0)}</td>
+                        <td>${Math.round(s.actual_sales||0)}</td><td>¥${(s.revenue||0).toLocaleString()}</td>
+                        <td>¥${(s.total_cost||0).toLocaleString()}</td>
+                        <td class="${(s.profit||0)>=0?'text-success':'text-danger'}">¥${(s.profit||0).toLocaleString()}</td>
+                        <td>¥${endCash.toLocaleString()}</td>
+                    </tr>`;
+                }).join('');
+            } catch(e) {
+                historyTbody.innerHTML = `<tr><td colspan="8" class="text-center text-danger">网络请求失败，请检查后端服务：${e.message||e}</td></tr>`;
+            }
         }
 
         /* ===================== Tab2: 学生账号 ===================== */
